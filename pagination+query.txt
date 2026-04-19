@@ -1,0 +1,220 @@
+import { Breadcrumbs, Button, Input, Loader, Text } from "@mantine/core"
+import { IconPlus, IconSearch } from "@tabler/icons-react"
+import Link from "next/link"
+import { useRouter } from "next/router"
+import React, { useCallback, useEffect, useRef, useState } from "react"
+import { useQuery } from "urql"
+
+const PAGINATED_CUSTOMERS_QUERY = `
+  query PaginatedCustomers($limit: Int, $after: String) {
+    paginatedCustomers(limit: $limit, after: $after) {
+      edges {
+        node {
+          id
+          fullName
+          email
+          phoneNumber
+          location
+          clientType
+        }
+        cursor
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+      totalCount
+    }
+  }
+`
+const LIMIT = 20
+
+function Customers() {
+  const router = useRouter()
+  const [after, setAfter] = useState(null)
+  const [customers, setCustomers] = useState([])
+
+  const [{ data, fetching, error }] = useQuery({
+    query: PAGINATED_CUSTOMERS_QUERY,
+    variables: { limit: LIMIT, after },
+  })
+
+  // Update customers list when data loads
+  useEffect(() => {
+    if (data?.paginatedCustomers?.edges?.length) {
+      setCustomers((prev) => [...prev, ...data.paginatedCustomers.edges])
+    }
+  }, [data])
+
+  const endCursor = data?.paginatedCustomers?.pageInfo?.endCursor
+  const hasNextPage = data?.paginatedCustomers?.pageInfo?.hasNextPage
+  const totalCount = data?.paginatedCustomers?.totalCount ?? 0
+
+  const observerRef = useRef(null)
+
+  const debounceTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect()
+      if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current)
+    }
+  }, [])
+
+  const loadMoreRef = useCallback(
+    (node) => {
+      if (fetching || !hasNextPage) return
+
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        const entry = entries[0]
+        if (entry.isIntersecting) {
+          // Debounce logic
+          if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current)
+          }
+
+          debounceTimeoutRef.current = setTimeout(() => {
+            setAfter(endCursor)
+          }, 200) // Adjust debounce delay as needed
+        }
+      })
+
+      if (node) observerRef.current.observe(node)
+    },
+    [fetching, hasNextPage, endCursor]
+  )
+
+  const handleGoToAdd = useCallback(() => {
+    router.push("/customers/add")
+  }, [])
+
+  const handleGoToCustomer = useCallback((id) => {
+    router.push(`/customers/${id}`)
+  }, [])
+
+  const breadcrumbs = [
+    { title: "Customers", href: "/customers" },
+    { title: "", href: "/customers" },
+  ].map((item, index) => (
+    <Link
+      className="text-gray-500 hover:underline hover:cursor-pointer text-[0.8rem]"
+      href={item.href}
+      key={index}
+    >
+      {item.title}
+    </Link>
+  ))
+
+  return (
+    <>
+      <Breadcrumbs>{breadcrumbs}</Breadcrumbs>
+      <br />
+
+      <div className="bg-white rounded-md border border-slate-200 p-4">
+        {/* Header */}
+        <div className="flex justify-between">
+          <div className="flex space-x-4 items-baseline">
+            <h1>Customers</h1>
+            <span className="text-gray-500 text-[0.8rem]">| {totalCount}</span>
+          </div>
+
+          <div className="flex space-x-4 items-center">
+            <Input
+              size="xs"
+              placeholder="Search"
+              leftSection={<IconSearch color="lightgray" size={14} />}
+            />
+            <Button
+              size="xs"
+              onClick={handleGoToAdd}
+              leftSection={<IconPlus size={14} />}
+            >
+              Add customer
+            </Button>
+          </div>
+        </div>
+
+        <br />
+
+        {/* Customer list */}
+        <div className="overflow-y-auto h-[calc(100vh-260px)]">
+          {customers.length === 0 && fetching ? (
+            <div className="flex justify-center py-8">
+              <Loader size="sm" />
+            </div>
+          ) : error ? (
+            <Text size="sm" align="center">
+              Failed to load customers
+            </Text>
+          ) : (
+            <table className="min-w-full border-separate border-spacing-0 mt-4">
+              <thead className="sticky top-0 z-99 bg-gray-50 rounded-t-lg">
+                <tr>
+                  <th className="text-left text-[0.8rem] px-4 py-2 border-r border-r-gray-200">
+                    Email
+                  </th>
+                  <th className="text-left text-[0.8rem] px-4 py-2 border-r border-r-gray-200">
+                    Full name
+                  </th>
+                  <th className="text-left text-[0.8rem] px-4 py-2 border-r  border-r-gray-200">
+                    Telephone
+                  </th>
+                  <th className="text-left text-[0.8rem] px-4 py-2 border-r border-r-gray-200">
+                    Client type
+                  </th>
+                  <th className="text-left text-[0.8rem] px-4 py-2 border-r border-r-gray-200">
+                    Location
+                  </th>
+                  <th className="text-left text-[0.8rem] px-4 py-2 w-[70px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map(({ node }) => (
+                  <tr key={node.id}>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      {node.email}
+                    </td>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      {node.fullName}
+                    </td>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      {node.phoneNumber}
+                    </td>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      {node.clientType}
+                    </td>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      {node.location}
+                    </td>
+                    <td className="px-4 py-2 text-[0.8rem] border-gray-200">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => handleGoToCustomer(node.id)}
+                      >
+                        More
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Infinite Scroll Trigger */}
+          {hasNextPage && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              <Loader size="xs" />
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default Customers

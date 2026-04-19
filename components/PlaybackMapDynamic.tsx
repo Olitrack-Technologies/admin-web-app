@@ -1,0 +1,212 @@
+import { useEffect, useMemo, useRef } from "react"
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Polyline,
+  useMap,
+  CircleMarker,
+  Popup,
+} from "react-leaflet"
+import L from "leaflet"
+
+// Calculates compass bearing from point A to B (in degrees)
+const getBearing = ([lat1, lon1], [lat2, lon2]) => {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const toDeg = (rad) => (rad * 180) / Math.PI
+
+  const φ1 = toRad(lat1)
+  const φ2 = toRad(lat2)
+  const Δλ = toRad(lon2 - lon1)
+
+  const y = Math.sin(Δλ) * Math.cos(φ2)
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ)
+
+  const θ = Math.atan2(y, x)
+  return (toDeg(θ) + 360) % 360 // Normalize to [0, 360)
+}
+
+// Centers map view on given position when it changes
+const CenterMap = ({ position }) => {
+  const map = useMap()
+
+  useEffect(() => {
+    if (position) {
+      map.setView(position, map.getZoom())
+    }
+  }, [position, map])
+
+  return null
+}
+
+// Renders map with vehicle marker and movement trail
+const Map = ({ data = [], currentIndex }) => {
+  const markerRef = useRef(null)
+  const lastValidAngle = useRef(0) // Stores last known direction
+
+  const current = data?.[currentIndex]
+  const next = data?.[currentIndex + 1]
+
+  // Extract current position or fallback to Nairobi
+  const position = useMemo(() => {
+    return current?.location?.coordinates
+      ? [current.location.coordinates[0], current.location.coordinates[1]]
+      : [-1.2921, 36.8219]
+  }, [current])
+
+  // Get next position to compute direction
+  const nextPos = useMemo(() => {
+    return next?.location?.coordinates
+      ? [next.location.coordinates[0], next.location.coordinates[1]]
+      : null
+  }, [next])
+
+  let angle = 0
+
+  // Compute bearing if next point exists, else reuse last
+  if (nextPos) {
+    angle = getBearing(position, nextPos)
+    lastValidAngle.current = angle
+  } else {
+    angle = lastValidAngle.current
+  }
+
+  // Create a rotating marker icon
+  const icon = L.divIcon({
+    className: "",
+    html: `
+        <div style="transform: rotate(${angle}deg); width: 20px; height: 20px;">
+<svg width="19.84" height="43.16" viewBox="0 0 495 1078" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M35.1527 544.536C33.8442 537.853 32.9262 528.552 34.1801 520.778C36.2152 508.153 39.4301 503.45 39.3402 497.282C39.2621 491.974 42.0121 400.392 42.7738 375.091C43.0199 367.005 44.6371 368.196 37.4027 370.278C26.8051 373.325 4.54728 379.583 1.91447 379.196C-1.55819 378.685 -0.937098 358.302 9.08634 352.247C16.7348 347.626 34.0473 343.665 41.8246 341.068C47.7231 339.095 45.7973 337.704 46.0551 330.716C46.8168 310.06 48.5473 256.357 46.184 227.318C43.2621 191.403 41.7387 142.704 53.352 107.275C71.4535 52.0323 111.793 20.423 165.414 6.28235C198.789 -2.51843 294.723 -1.2489 324.446 4.99329C363.422 13.173 412.223 37.8409 432.032 74.2433C443.168 94.6925 451.981 120.071 453.133 145.982C454.653 180.138 449.43 252.47 449.133 279.337C448.907 299.989 449.164 327.325 450.227 339.31C450.868 346.544 450.356 345.126 456.844 346.767C466.801 349.278 487.032 355.13 490.692 366.65C495.426 381.56 495.711 384.251 491.77 383.259C489.137 382.595 471.289 377.173 459.832 374.88C447.43 372.4 450.161 373.439 450.34 384.818C450.758 411.083 451.614 480.571 452.34 501.802C452.575 508.751 453.121 508.689 455.039 515.294C456.692 520.978 458.567 528.798 458.645 535.107C458.719 541.314 456.551 547.091 454.586 551.478C451.786 557.724 451.594 556.798 451.313 563.591C450.071 593.685 447.758 734.614 448.512 737.474C449.344 740.642 454.356 759.271 452.18 770.47C450 781.669 447.301 782.665 447.036 792.462C446.954 795.462 449.024 828.923 445.836 858.653C444.129 874.575 437.946 881.396 435.739 899.857C430.489 943.747 424.2 989.642 418.579 1013.64C413.422 1035.67 400.625 1045.92 378.579 1052.2C370.368 1054.54 355.903 1062.59 334.829 1068.87C292.649 1081.43 189.336 1079.47 148.735 1068.48C113.438 1058.93 105.95 1049.83 100.43 1048.83C94.9067 1047.82 69.141 1033.62 66.3832 1025.77C63.6215 1017.92 45.8481 909.607 43.2152 876.228C42.2309 863.782 39.5942 848.501 38.9106 832.075C37.7621 804.454 38.7817 776.45 38.016 774.064C36.7934 770.259 34.5395 759.325 35.1567 746.532C35.6723 735.825 39.2621 731.443 39.2074 722.552C39.0512 697.079 38.2738 587.888 37.8051 559.661C37.6723 551.642 36.6293 552.064 35.1527 544.536Z" fill="#2089FE"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M63.9227 757.075C66.2781 758.837 69.8524 761.302 73.5399 763.083C75.3367 763.95 76.6961 764.599 77.7235 765.083C82.2235 767.208 80.8406 765.888 80.3797 772.423C79.3133 787.552 76.1258 826.349 71.4149 826.677C65.5633 827.087 64.0828 815.665 63.3914 801.774C62.8641 791.235 61.7352 769.88 61.3016 760.048C61.0203 753.677 60.1024 754.216 63.9227 757.075Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M60.8962 734.18C60.9314 718.055 58.4665 615.914 57.9665 595.399C57.8572 590.864 57.0056 591.457 60.6814 593.094C64.2478 594.68 70.7165 597.426 77.1579 599.453C80.0056 600.352 82.1345 600.981 83.7204 601.418C89.3494 602.969 88.2322 600.926 88.0681 606.797C87.5134 626.813 85.1423 709.754 83.4314 733.164C82.3845 747.453 81.7556 754.887 81.3923 758.707C80.8962 763.977 81.8806 763.246 75.8962 760.141C69.9353 757.047 60.8611 751.68 60.904 747.696C60.9705 741.77 60.8962 734.18 60.8962 734.18Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M58.7111 516.19C58.8127 506.937 62.2619 405.483 63.3048 374.964C63.547 367.858 62.3791 361.448 68.0236 372.288C71.5666 379.093 76.5236 393.347 80.1291 422.698C86.3634 473.503 87.3166 501.808 88.1642 525.21C88.7541 541.44 88.6056 558.995 88.4611 568.229C88.3283 576.612 89.9611 575.765 81.672 571.433C72.7853 566.792 58.1642 558.37 58.2189 553.253C58.3009 545.905 58.7111 516.19 58.7111 516.19Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M99.9578 428.918C95.4031 399.981 76.0984 299.965 84.032 297.731C151.528 278.688 166.419 271.278 237.68 273.278C312.458 275.371 415.001 285.703 415.391 306.121C415.559 315.09 400.239 400.473 391.977 430.192C388.727 441.875 390.27 440.875 380.528 438.875C361.243 434.914 308.247 424.336 254.923 424.008C204.544 423.703 155.61 427.305 105.88 434.625C99.0398 435.633 101.196 436.785 99.9578 428.918Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M129.855 542.762C130.187 512.602 155.136 488.196 185.3 488.528L309.203 489.895C339.367 490.227 363.773 515.176 363.441 545.336C363.109 575.501 338.156 599.907 307.996 599.575L184.089 598.208C153.929 597.876 129.523 572.926 129.855 542.762Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M111.821 828.234C125.864 831.312 155.942 837.699 188.146 841.363C232.919 846.461 289.06 844.507 333.345 837.73C346.099 835.777 358.446 833.316 366.958 831.5C381.044 828.496 378.146 825.722 378.63 839.386C379.771 871.461 382.888 966.73 379.72 968.007C315.071 994.109 268.7 992.461 202.231 985.89C154.356 981.16 98.8252 972.734 98.7666 961.121C98.6963 948.363 102.317 855.519 103.478 831.941C103.845 824.429 102.759 826.25 111.821 828.234Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M399.982 541.792C400.228 519.191 408.564 444.202 411.619 424.956C413.822 411.077 418.264 391.8 421.139 381.538C422.857 375.406 428.217 365.284 428.721 379.226C429.037 388.007 429.869 520.074 430.072 553.046C430.127 561.507 431.779 559.331 425.553 563.781C417.377 569.613 400.967 580.796 399.58 577.589C397.732 573.3 399.982 541.792 399.982 541.792Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M400.711 733.13C400.231 716.661 398.817 637.669 399.129 612.685C399.227 604.849 397.77 605.626 403.488 603.962C408.703 602.443 417.785 599.81 423.297 598.724C429.102 597.583 427.992 597.86 427.852 603.044C427.231 625.696 424.027 727.763 422.684 749.966C422.395 754.743 423.09 753.9 419.207 756.474C413.797 760.068 403.203 766.232 402.512 763.263C401.606 759.38 400.711 733.13 400.711 733.13Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M405.852 769.144C407.598 768.453 421.286 759.676 421.504 761.418C421.692 762.929 420.325 808.422 416.657 823.691C412.727 840.043 407.395 821.586 406.856 814.363C406.383 808.09 403.782 769.965 405.852 769.144Z" fill="#203548"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M422.525 69.8544C408.818 52.206 394.302 40.5458 390.095 43.8037C385.888 47.0732 393.587 64.0263 407.294 81.6748C420.997 99.3232 435.517 110.991 439.724 107.726C443.927 104.464 436.228 87.5029 422.525 69.8544Z" fill="#FEFEFE"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M92.5389 79.9457C78.4491 97.2972 63.6756 108.637 59.5428 105.278C55.41 101.914 63.4803 85.1371 77.5702 67.7972C91.66 50.4457 106.433 39.1058 110.566 42.4652C114.699 45.8246 106.629 62.6058 92.5389 79.9457Z" fill="#FEFEFE"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M338.219 20.3905C338.164 25.453 297.785 29.1131 248.035 28.5623C198.285 28.0116 157.996 23.4608 158.055 18.4022C158.109 13.3397 198.484 9.68344 248.238 10.2303C297.988 10.7733 338.277 15.3202 338.219 20.3905Z" fill="black"/>
+<path d="M101.532 67.7656C82.216 123.023 77.6653 215.047 77.97 274.828C78.0481 289.605 71.3489 277.273 72.0481 292.484C75.1184 359.051 97.302 448.141 104.454 521.871C113.204 612.121 104.388 721.508 99.3567 812.176C97.9387 835.844 82.7551 984.965 98.6535 990.773" stroke="#FEFEFE" stroke-width="1.01145" stroke-miterlimit="22.9256" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M398.969 69.9336C417.832 117.141 420.629 219.172 417.84 273.5C416.773 294.219 425.058 287.539 420.965 314.355C406.277 410.582 385.254 487.258 382.223 588.168C380.75 637.316 404.785 979.141 378.769 995.211" stroke="#FEFEFE" stroke-width="1.01145" stroke-miterlimit="22.9256" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M379.719 968.012L376.75 1052.78" stroke="#FEFEFE" stroke-width="1.01145" stroke-miterlimit="22.9256" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M98.9414 962.156L99.0156 1048.44" stroke="#FEFEFE" stroke-width="1.01145" stroke-miterlimit="22.9256" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M377.016 1045.24C317.625 1074.06 155.613 1074.44 99.0039 1039.49" stroke="#FEFEFE" stroke-width="1.01145" stroke-miterlimit="22.9256" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+   </div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [10, 10],
+  })
+
+  // Build trail polyline up to current index
+  const path = useMemo(() => {
+    return data
+      .slice(0, currentIndex + 1)
+      .map((t) => {
+        const coords = t?.location?.coordinates
+        if (!coords) return null
+        return {
+          lat: coords[0],
+          lng: coords[1],
+          speed: t.speed ?? 0,
+          timestamp: t.timestamp,
+        }
+      })
+      .filter(Boolean)
+  }, [data, currentIndex])
+
+  return (
+    <MapContainer
+      center={position}
+      zoom={17}
+      className="h-[calc(100vh-350px)] col-span-8"
+    >
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {current && (
+        <Marker ref={markerRef} position={position} icon={icon}>
+          <Popup>
+            <div>
+              <div>
+                <strong>Lat:</strong> {position[0].toFixed(6)}
+              </div>
+              <div>
+                <strong>Lng:</strong> {position[1].toFixed(6)}
+              </div>
+              <div>
+                <strong>Speed:</strong> {current?.speed ?? 0} KPH
+              </div>
+              <div>
+                <strong>Time:</strong>{" "}
+                {new Date(+current.timestamp).toLocaleString()}
+              </div>
+              <div className="mt-2">
+                <a
+                  href={`https://www.google.com/maps?q=&layer=c&cbll=${position[0]},${position[1]}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#2563eb", textDecoration: "underline" }}
+                >
+                  View Street
+                </a>
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      )}
+      {path.length > 1 && (
+        <Polyline positions={path.map((p) => [p.lat, p.lng])} color="blue" />
+      )}
+
+      {path.map((point, i) => (
+        <CircleMarker
+          key={i}
+          center={[point.lat, point.lng]}
+          radius={4}
+          pathOptions={{
+            color: point.speed > 80 ? "red" : "blue",
+            fillColor: point.speed > 80 ? "red" : "blue", // Red if speed > 80
+            fillOpacity: 1,
+          }}
+        >
+          <Popup>
+            <div>
+              <div>
+                <strong>Lat:</strong> {point.lat.toFixed(6)}
+              </div>
+              <div>
+                <strong>Lng:</strong> {point.lng.toFixed(6)}
+              </div>
+              <div>
+                <strong>Speed:</strong> {point.speed} KPH
+              </div>
+              <div>
+                <strong>Time:</strong>{" "}
+                {new Date(+point.timestamp).toLocaleString()}
+              </div>
+
+              <div className="mt-2">
+                <a
+                  href={`https://www.google.com/maps?q=&layer=c&cbll=${point.lat},${point.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#2563eb", textDecoration: "underline" }}
+                >
+                  View Street
+                </a>
+              </div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      ))}
+
+      <CenterMap position={position} />
+    </MapContainer>
+  )
+}
+
+export default Map

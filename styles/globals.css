@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "EudoxusSans";
+  src: url("/fonts/EudoxusSans-Regular.ttf");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "EudoxusSans";
+  src: url("/fonts/EudoxusSans-Bold.ttf");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "EudoxusSans";
+  src: url("/fonts/EudoxusSans-Medium.ttf");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Nasalization";
+  src: url("/fonts/Nasalization.otf");
+  font-weight: 500;
+  font-style: normal;
+}
+
+body {
+  font-family: "EudoxusSans", sans-serif;
+  font-weight: normal;
+}
+
+p {
+  font-size: 0.8rem;
+}
+
+h1 {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.leaflet-container {
+  z-index: 0;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0px !important;
+  width: 350px;
+  padding: 0;
+  z-index: 10;
+  color: black !important;
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  line-height: 1.4;
+  border-radius: 0px;
+}
+
+.leaflet-popup-tip {
+  background: white;
+  border-radius: 0px !important;
+}
