@@ -17,7 +17,21 @@ import * as Yup from "yup"
 import { useDebouncedValue } from "@mantine/hooks"
 import { IconSearch } from "@tabler/icons-react"
 import Empty from "@/components/Empty"
-import { AgentFormValues, validationSchema } from "./add"
+interface AgentFormValues {
+  fullName: string
+  email: string
+  phoneNumber: string
+  location: string
+}
+
+const validationSchema = Yup.object({
+  fullName: Yup.string().required("Full name is required"),
+  email: Yup.string().email("Invalid email").required("Email is required"),
+  phoneNumber: Yup.string()
+    .matches(/^254\d{9}$/, "Must start with 254 and be 12 digits")
+    .required("Phone number is required"),
+  location: Yup.string().required("Location is required"),
+})
 import { AssetsTable } from "../assets"
 
 // -----------------------------
@@ -280,8 +294,8 @@ const BasicInformation = (agent: Agent) => {
         <AssetsTable
           assets={filteredAssets}
           fetching={false}
-          error={error}
-          hasNextPage={hasNextPage}
+          error={null}
+          hasNextPage={false}
           handleGoToAsset={handleGoToAsset}
           loadMoreRef={loadMoreRef}
         />
@@ -418,8 +432,6 @@ function AgentSingle() {
   })
   const [fetching, setFetching] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
-
-  ))
 
   // Simulate fetch
   useEffect(() => {

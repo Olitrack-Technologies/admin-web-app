@@ -198,7 +198,7 @@ function AddAsset() {
       description: "",
       type: "",
       customer: "",
-      devices: [],
+      devices: [] as Device[],
     },
     validationSchema,
     onSubmit: async (values, { setSubmitting }) => {

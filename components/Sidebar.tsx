@@ -7,6 +7,7 @@ import {
   IconRefresh,
   IconCar4wd,
   IconCpu,
+  IconStack2,
   IconChevronLeft,
   IconChevronRight,
   IconShieldLock,
@@ -31,6 +32,7 @@ const navGroups = [
       { label: "Customers", icon: IconUsers, href: "/customers" },
       { label: "Assets", icon: IconCar4wd, href: "/assets" },
       { label: "Devices", icon: IconCpu, href: "/devices" },
+      { label: "Device Types", icon: IconStack2, href: "/device-types" },
     ],
   },
   {

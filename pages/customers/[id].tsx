@@ -18,7 +18,23 @@ import { useFormik } from "formik"
 import * as Yup from "yup"
 
 import Image from "next/image"
-import { CustomerFormValues, validationSchema } from "./add"
+interface CustomerFormValues {
+  fullName: string
+  email: string
+  phoneNumber: string
+  location: string
+  clientType: string
+}
+
+const validationSchema = Yup.object({
+  fullName: Yup.string().required("Full name is required"),
+  email: Yup.string().email("Invalid email").required("Email is required"),
+  phoneNumber: Yup.string()
+    .matches(/^254\d{9}$/, "Must start with 254 and be 12 digits")
+    .required("Phone number is required"),
+  location: Yup.string().required("Location is required"),
+  clientType: Yup.string().required("Client type is required"),
+})
 import { useDebouncedValue } from "@mantine/hooks"
 import Empty from "@/components/Empty"
 import Layout from "@/components/Layout"

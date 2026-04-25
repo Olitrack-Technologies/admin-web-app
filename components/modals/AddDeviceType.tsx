@@ -1,160 +1,232 @@
-import { Button, Modal, NumberInput, Select, TextInput } from "@mantine/core"
-
-import { IconCheck } from "@tabler/icons-react"
-
-import { useFormik } from "formik"
-
-import React from "react"
-
-import { protocols } from "@/constants/protocols"
-import { validities } from "@/constants/validities"
-import { notifications } from "@mantine/notifications"
-
-import { ModalProps } from "@/types/project"
-import { DeviceType_VS } from "@/validation_schemas"
+import { Button, Modal, NumberInput, Select, TextInput } from "@mantine/core";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import React from "react";
+import { protocols } from "@/constants/protocols";
+import { ModalProps } from "@/types/project";
+import useSWRMutation from "swr/mutation";
+import { toast } from "react-toastify";
+import api from "@/lib/api";
+import { RichTextEditor, Link } from "@mantine/tiptap";
+import { useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
 
 interface AddDeviceTypeForm {
-  name: string
-  protocol: string
-  installation_cost: number
-  subscription_cost: number
-  validity: string
-  created_by: number
+	name: string;
+	protocol: string;
+	expiry_months: number;
+	installation_cost: number | null;
+	subscription_cost: number | null;
+	instructions: string;
+}
+
+const validationSchema = Yup.object({
+	name: Yup.string()
+		.required("Name is required")
+		.max(255, "Name cannot exceed 255 characters"),
+	protocol: Yup.string().required("Protocol is required"),
+	expiry_months: Yup.number()
+		.required("Expiry months is required")
+		.integer("Must be a whole number")
+		.min(1, "Must be at least 1 month")
+		.typeError("Must be a number"),
+	installation_cost: Yup.number()
+		.required("Installation cost is required")
+		.min(0, "Cannot be negative")
+		.typeError("Must be a number"),
+	subscription_cost: Yup.number()
+		.required("Subscription cost is required")
+		.min(0, "Cannot be negative")
+		.typeError("Must be a number"),
+	instructions: Yup.string()
+});
+
+async function createDeviceType(
+	_url: string,
+	{ arg }: { arg: AddDeviceTypeForm }
+) {
+	const { data } = await api.post("/device-types/create", arg);
+	return data;
 }
 
 const AddDeviceType = React.memo(({ opened, handleClose }: ModalProps) => {
-  // Functions
-  const handleAddDeviceType = async (
-    values: AddDeviceTypeForm,
-    onSuccess?: () => void
-  ) => {
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    notifications.show({
-      title: "Success",
-      message: `Device type "${values.name}" created!`,
-      color: "green",
-      icon: <IconCheck size={18} />,
-    })
-    onSuccess?.()
-  }
+	const { trigger } = useSWRMutation("/device-types/create", createDeviceType);
 
-  // Formik
-  const formik = useFormik({
-    initialValues: {
-      name: "",
-      protocol: "",
-      installation_cost: 0,
-      subscription_cost: 0,
-      validity: "",
-      created_by: 1,
-    },
-    validationSchema: DeviceType_VS,
-    onSubmit: async (values, { resetForm }) => {
-      handleAddDeviceType(values, () => {
-        resetForm()
-        handleClose()
-      })
-    },
-  })
+	const formik = useFormik<AddDeviceTypeForm>({
+		initialValues: {
+			name: "",
+			protocol: "",
+			expiry_months: 12,
+			installation_cost: 0,
+			subscription_cost: 0,
+			instructions: ""
+		},
+		validationSchema,
+		onSubmit: async (values, { setSubmitting, resetForm }) => {
+			try {
+				await trigger(values);
+				toast.success(`Device type "${values.name}" created`);
+				editor?.commands.clearContent();
+				resetForm();
+				handleClose();
+			} catch (err: any) {
+				const message =
+					err?.response?.data?.error ??
+					err?.message ??
+					"Failed to create device type";
+				toast.error(message);
+			} finally {
+				setSubmitting(false);
+			}
+		}
+	});
 
-  return (
-    <Modal
-      title={<span className="font-bold text-[1.3rem]">Add device type</span>}
-      centered
-      opened={opened}
-      onClose={handleClose}
-      closeOnClickOutside={false}
-    >
-      <form onSubmit={formik.handleSubmit}>
-        <div className="p-8 space-y-3">
-          <TextInput
-            size="xs"
-            label="Device Name"
-            placeholder="Enter device name"
-            value={formik.values.name}
-            onChange={(e) =>
-              formik.setFieldValue("name", e.currentTarget.value)
-            }
-            onBlur={() => formik.setFieldTouched("name", true)}
-            error={formik.touched.name && formik.errors.name}
-          />
+	const editor = useEditor({
+		immediatelyRender: false,
+		extensions: [
+			StarterKit,
+			Link,
+			Placeholder.configure({
+				placeholder: "e.g. Insert SIM, power on, wait for GPS lock."
+			})
+		],
+		content: formik.values.instructions,
+		onUpdate({ editor }) {
+			formik.setFieldValue("instructions", editor.getHTML());
+		}
+	});
 
-          {/* Protocol */}
-          <Select
-            label="Protocol"
-            size="xs"
-            placeholder="Select protocol"
-            data={protocols}
-            value={formik.values.protocol}
-            onChange={(val) => formik.setFieldValue("protocol", val)}
-            onBlur={() => formik.setFieldTouched("protocol", true)}
-            error={formik.touched.protocol && formik.errors.protocol}
-          />
+	return (
+		<Modal
+			title={<span className="font-bold text-[1.3rem]">Add device type</span>}
+			centered
+			opened={opened}
+			onClose={handleClose}
+			closeOnClickOutside={false}>
+			<form onSubmit={formik.handleSubmit}>
+				<div className="p-8 space-y-3">
+					<TextInput
+						size="xs"
+						label="Device Name"
+						placeholder="e.g. GT06"
+						withAsterisk
+						{...formik.getFieldProps("name")}
+						error={formik.touched.name && formik.errors.name}
+					/>
 
-          {/* Installation Cost */}
-          <NumberInput
-            min={0}
-            hideControls
-            prefix="Ksh."
-            placeholder="Ksh."
-            thousandSeparator
-            size="xs"
-            label="Installation Cost"
-            value={formik.values.installation_cost}
-            onChange={(val) => formik.setFieldValue("installation_cost", val)}
-            onBlur={() => formik.setFieldTouched("installation_cost", true)}
-            error={
-              formik.touched.installation_cost &&
-              formik.errors.installation_cost
-            }
-          />
+					<Select
+						label="Protocol"
+						size="xs"
+						placeholder="Select protocol"
+						withAsterisk
+						data={protocols}
+						value={formik.values.protocol}
+						onChange={(val) => formik.setFieldValue("protocol", val ?? "")}
+						onBlur={() => formik.setFieldTouched("protocol", true)}
+						error={formik.touched.protocol && formik.errors.protocol}
+					/>
 
-          {/* Subscription Cost */}
-          <NumberInput
-            min={0}
-            hideControls
-            label="Subscription Cost"
-            prefix="Ksh."
-            placeholder="Ksh."
-            size="xs"
-            thousandSeparator
-            value={formik.values.subscription_cost}
-            onChange={(val) => formik.setFieldValue("subscription_cost", val)}
-            onBlur={() => formik.setFieldTouched("subscription_cost", true)}
-            error={
-              formik.touched.subscription_cost &&
-              formik.errors.subscription_cost
-            }
-          />
+					<NumberInput
+						size="xs"
+						label="Expiry Months"
+						description="Subscription duration applied to each device of this type"
+						placeholder="e.g. 12"
+						withAsterisk
+						suffix=" months"
+						min={1}
+						allowDecimal={false}
+						value={formik.values.expiry_months}
+						onChange={(val) => formik.setFieldValue("expiry_months", val)}
+						onBlur={() => formik.setFieldTouched("expiry_months", true)}
+						error={formik.touched.expiry_months && formik.errors.expiry_months}
+					/>
 
-          {/* Validity */}
-          <Select
-            label="Validity"
-            placeholder="e.g. 1yr , 6m"
-            size="xs"
-            data={validities}
-            value={formik.values.validity}
-            onChange={(val) => formik.setFieldValue("validity", val)}
-            onBlur={() => formik.setFieldTouched("validity", true)}
-            error={formik.touched.validity && formik.errors.validity}
-          />
-        </div>
+					<NumberInput
+						size="xs"
+						label="Installation Cost"
+						required
+						placeholder="Ksh. 0"
+						prefix="Ksh. "
+						thousandSeparator
+						min={0}
+						hideControls
+						value={formik.values.installation_cost || undefined}
+						onChange={(val) => formik.setFieldValue("installation_cost", val)}
+						onBlur={() => formik.setFieldTouched("installation_cost", true)}
+						error={
+							formik.touched.installation_cost &&
+							formik.errors.installation_cost
+						}
+					/>
 
-        <div className="flex justify-end px-8 pb-4">
-          <Button
-            size="xs"
-            type="submit"
-            loading={formik.isSubmitting}
-            disabled={formik.isSubmitting}
-          >
-            Save Information
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-})
+					<NumberInput
+						size="xs"
+						label="Subscription Cost"
+						required
+						placeholder="Ksh. 0"
+						prefix="Ksh. "
+						thousandSeparator
+						min={0}
+						hideControls
+						value={formik.values.subscription_cost || undefined}
+						onChange={(val) => formik.setFieldValue("subscription_cost", val)}
+						onBlur={() => formik.setFieldTouched("subscription_cost", true)}
+						error={
+							formik.touched.subscription_cost &&
+							formik.errors.subscription_cost
+						}
+					/>
 
-AddDeviceType.displayName = "AddDeviceType"
+					<div>
+						<p className="text-[12px] font-medium text-slate-700 mb-1">
+							Instructions{" "}
+							<span className="text-slate-400 font-normal">(optional)</span>
+						</p>
+						<RichTextEditor editor={editor} styles={{ root: { fontSize: 12 } }}>
+							<RichTextEditor.Toolbar sticky stickyOffset={0}>
+								<RichTextEditor.ControlsGroup>
+									<RichTextEditor.Bold />
+									<RichTextEditor.Italic />
+									<RichTextEditor.Underline />
+									<RichTextEditor.Code />
+								</RichTextEditor.ControlsGroup>
+								<RichTextEditor.ControlsGroup>
+									<RichTextEditor.BulletList />
+									<RichTextEditor.OrderedList />
+								</RichTextEditor.ControlsGroup>
+								<RichTextEditor.ControlsGroup>
+									<RichTextEditor.Link />
+									<RichTextEditor.Unlink />
+								</RichTextEditor.ControlsGroup>
+								<RichTextEditor.ControlsGroup>
+									<RichTextEditor.ClearFormatting />
+								</RichTextEditor.ControlsGroup>
+							</RichTextEditor.Toolbar>
+							<RichTextEditor.Content />
+						</RichTextEditor>
+						{formik.touched.instructions && formik.errors.instructions && (
+							<p className="text-[11px] text-red-500 mt-1">
+								{formik.errors.instructions}
+							</p>
+						)}
+					</div>
+				</div>
 
-export default AddDeviceType
+				<div className="flex justify-end px-8 pb-4">
+					<Button
+						size="xs"
+						type="submit"
+						loading={formik.isSubmitting}
+						disabled={formik.isSubmitting}>
+						Add Device Type
+					</Button>
+				</div>
+			</form>
+		</Modal>
+	);
+});
+
+AddDeviceType.displayName = "AddDeviceType";
+
+export default AddDeviceType;

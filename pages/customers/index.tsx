@@ -1,9 +1,9 @@
 import Empty from "@/components/Empty"
 import Layout from "@/components/Layout"
+import AddCustomer from "@/components/modals/AddCustomer"
 import { Button, Input, Loader, Text } from "@mantine/core"
 import { useDebouncedValue } from "@mantine/hooks"
 import { IconPlus, IconSearch } from "@tabler/icons-react"
-import Link from "next/link"
 import { useRouter } from "next/router"
 import React, { useCallback, useEffect, useState } from "react"
 import mockData from "@/data/mock.json"
@@ -141,8 +141,8 @@ interface Customer {
 function Customers() {
   const router = useRouter()
   const [query, setQuery] = useState("")
+  const [openAdd, setOpenAdd] = useState(false)
 
-  const handleGoToAdd = useCallback(() => { router.push("/customers/add") }, [router])
   const handleGoToCustomer = useCallback((id: string) => { router.push(`/customers/${id}`) }, [router])
 
   const { items, hasMore, loaderRef, total } = useInfiniteScroll(
@@ -170,7 +170,7 @@ function Customers() {
               <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{total}</span>
             </div>
             <CustomersHeader
-              handleGoToAdd={handleGoToAdd}
+              handleGoToAdd={() => setOpenAdd(true)}
               onSearchChange={setQuery}
             />
           </div>
@@ -185,6 +185,8 @@ function Customers() {
           />
         </div>
       </div>
+
+      <AddCustomer opened={openAdd} handleClose={() => setOpenAdd(false)} />
     </Layout>
   )
 }

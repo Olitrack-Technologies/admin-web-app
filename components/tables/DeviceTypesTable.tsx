@@ -7,14 +7,8 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { Badge, Button, Code, Input } from "@mantine/core"
-import {
-  IconSearch,
-  IconChevronUp,
-  IconChevronDown,
-  IconPlus,
-} from "@tabler/icons-react"
-
+import { Badge, Button, Code } from "@mantine/core"
+import { IconChevronUp, IconChevronDown } from "@tabler/icons-react"
 import moment from "moment"
 import mockData from "@/data/mock.json"
 import Empty from "../Empty"
@@ -35,15 +29,19 @@ export function highlightText(text: string, query: string) {
   )
 }
 
-export default function DeviceTypesTable({
-  handleOpenAdd,
-  onClickMore,
-}: {
+interface DeviceTypesTableProps {
   handleOpenAdd: () => void
   onClickMore: (val: number) => void
-}) {
+  globalFilter: string
+  onGlobalFilterChange: (value: string) => void
+}
+
+export default function DeviceTypesTable({
+  onClickMore,
+  globalFilter,
+  onGlobalFilterChange,
+}: DeviceTypesTableProps) {
   const data = { deviceTypes: mockData.deviceTypes as DeviceType[] }
-  const [globalFilter, setGlobalFilter] = React.useState("")
 
   const columns: ColumnDef<DeviceType>[] = [
     { header: "Name", accessorKey: "name" },
@@ -92,99 +90,59 @@ export default function DeviceTypesTable({
     data: data?.deviceTypes || [],
     columns,
     state: { globalFilter },
-    onGlobalFilterChange: setGlobalFilter,
+    onGlobalFilterChange,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
 
   return (
-    <>
-      <br />
-      {/* Header */}
-      <div className="flex justify-between mb-4">
-        <div className="flex space-x-4 items-baseline">
-          <h1>Device Types</h1>
-          <span className="text-gray-500 text-[0.8rem]">
-            | {data?.deviceTypes.length}
-          </span>
-        </div>
-
-        <div className="flex space-x-4 items-center">
-          <Button
-            size="xs"
-            onClick={handleOpenAdd}
-            leftSection={<IconPlus size={14} />}
-          >
-            Add device type
-          </Button>
-        </div>
-      </div>
-
-      <div className="bg-white text-gray-900">
-        {/* Search Input */}
-        <div className="flex justify-end mb-4">
-          <Input
-            size="xs"
-            placeholder="Search..."
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            leftSection={<IconSearch size={16} />}
-            w={200}
-          />
-        </div>
-
-        {/* Table */}
-        <div className="overflow-hidden border border-gray-200 rounded-md">
-          <div className="h-[calc(100vh-360px)] overflow-y-auto">
-            {table.getRowModel().rows.length > 0 ? (
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 bg-gray-50 z-10">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        const canSort = header.column.getCanSort()
-                        return (
-                          <th
-                            key={header.id}
-                            className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200 cursor-pointer"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            <div className="flex items-center gap-1">
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              {canSort && (
-                                header.column.getIsSorted() === "asc" ? <IconChevronUp size={12} /> :
-                                header.column.getIsSorted() === "desc" ? <IconChevronDown size={12} /> :
-                                <span className="opacity-40">↕</span>
-                              )}
-                            </div>
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <Empty
-                title="No device types found"
-                description="Get started by clicking the add device type button above"
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+    <div className="overflow-y-auto h-[calc(100vh-260px)]">
+      {table.getRowModel().rows.length > 0 ? (
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 bg-gray-50 z-10">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort()
+                  return (
+                    <th
+                      key={header.id}
+                      className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200 cursor-pointer"
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-1">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {canSort && (
+                          header.column.getIsSorted() === "asc" ? <IconChevronUp size={12} /> :
+                          header.column.getIsSorted() === "desc" ? <IconChevronDown size={12} /> :
+                          <span className="opacity-40">↕</span>
+                        )}
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => (
+              <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <Empty
+          title="No device types found"
+          description="Get started by clicking the add device type button above"
+        />
+      )}
+    </div>
   )
 }

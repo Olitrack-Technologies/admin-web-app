@@ -576,7 +576,6 @@ export const ExecReportParamsModal = ({
 // -----------------------------
 // Exported Component
 // -----------------------------
-)
 
 function Analytics() {
   // States & Refs

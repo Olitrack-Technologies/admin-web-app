@@ -70,7 +70,7 @@ const DEVICE_TYPES = [
   { label: "SPEED LMT(SPL01)", value: "spl_01" },
 ]
 
-interface FullAsset extends Asset {
+interface FullAsset extends Omit<Asset, "customer"> {
   customer: Customer
   devices: Device[]
 }
@@ -103,14 +103,7 @@ function AssetSingle() {
   const { id } = router.query
 
   // States & Refs
-  const [asset, setAsset] = useState<Asset>({
-    id: "",
-    name: "",
-    description: "",
-    ident: "",
-    type: "",
-    createdAt: "",
-  })
+  const [asset, setAsset] = useState<FullAsset>(MOCK_ASSET)
   const [fetching, setFetching] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -164,10 +157,10 @@ function AssetSingle() {
             <BasicInformation assetId={asset?.id} />
           </Tabs.Panel>
           <Tabs.Panel value="playback">
-            {/* <Playback vehicle={vehicle?.id} /> */}
+            <div />
           </Tabs.Panel>
-          <Tabs.Panel value="reports">{/* <Reports /> */}</Tabs.Panel>
-          <Tabs.Panel value="delete">{/* <Delete /> */}</Tabs.Panel>
+          <Tabs.Panel value="reports"><div /></Tabs.Panel>
+          <Tabs.Panel value="delete"><div /></Tabs.Panel>
         </Tabs>
       </div>
     </Layout>
@@ -177,7 +170,7 @@ function AssetSingle() {
 // -----------------------------
 // Basic Information Component
 // -----------------------------
-const BasicInformation = ({ assetId: _assetId }) => {
+const BasicInformation = ({ assetId: _assetId }: { assetId: string }) => {
   // Hooks
 
   // State & Refs
@@ -436,7 +429,7 @@ interface AddDeviceModalProps {
 
 export const AddDeviceModal = ({ opened, onClose }: AddDeviceModalProps) => {
   // Functions
-  const handleAddDevice = async (values: EditDeviceForm) => {
+  const handleAddDevice = async (values: { id: string; type: string; agent: string; expiry: Date | null; iDate: string; mode: string; txCodes: string[] }) => {
     console.log(values)
   }
 
@@ -450,10 +443,10 @@ export const AddDeviceModal = ({ opened, onClose }: AddDeviceModalProps) => {
       id: "",
       type: "",
       agent: "",
-      expiry: "",
+      expiry: null as Date | null,
       iDate: "",
       mode: "m-pesa",
-      txCodes: [],
+      txCodes: [] as string[],
     },
     validationSchema: editDeviceValidationSchema,
     onSubmit: async (values, { setSubmitting }) => {
@@ -712,7 +705,7 @@ export const EditDeviceModal = ({
                 placeholder="Select expiry date"
                 value={formik.values.expiry}
                 onChange={(val) => formik.setFieldValue("expiry", val)}
-                error={formik.touched.expiry && formik.errors.expiry}
+                error={formik.touched.expiry && (formik.errors.expiry as string | undefined)}
               />
             </div>
 

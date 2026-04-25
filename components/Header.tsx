@@ -1,27 +1,43 @@
-import { Avatar, Menu, UnstyledButton } from "@mantine/core"
+import { Avatar, Menu, UnstyledButton } from "@mantine/core";
 import {
   IconBell,
   IconChevronDown,
   IconLogout,
   IconUser,
-} from "@tabler/icons-react"
-import { useRouter } from "next/router"
-import { getMockSession, mockSignOut } from "@/lib/mockAuth"
+} from "@tabler/icons-react";
+import { useRouter } from "next/router";
+import useSWRMutation from "swr/mutation";
+import { toast } from "react-toastify";
+import api from "@/lib/api";
+
+async function adminLogout(_url: string) {
+  const { data } = await api.post("/auth/admin/logout");
+  return data;
+}
 
 export default function Header() {
-  const router = useRouter()
-  const session = getMockSession()
+  const router = useRouter();
+  const { trigger } = useSWRMutation("/auth/admin/logout", adminLogout);
+
+  const session = { name: "Admin User", email: "admin@olitrack.co.ke" };
   const initials = (session?.name ?? "Admin")
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase()
+    .toUpperCase();
 
-  const handleSignOut = () => {
-    mockSignOut()
-    router.push("/login")
-  }
+  const handleSignOut = async () => {
+    try {
+      await trigger();
+      toast.success("Logged out successfully");
+      router.push("/login");
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error ?? err?.message ?? "Failed to logout";
+      toast.error(message);
+    }
+  };
 
   return (
     <header className="flex items-center justify-between px-6 h-14 bg-white border-b border-slate-200 shrink-0 z-20">
@@ -70,5 +86,5 @@ export default function Header() {
         </Menu>
       </div>
     </header>
-  )
+  );
 }

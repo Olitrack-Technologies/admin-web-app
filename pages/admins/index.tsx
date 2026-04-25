@@ -1,109 +1,35 @@
-import Layout from "@/components/Layout"
-import { Badge, Button, Modal, PasswordInput, Select, TextInput } from "@mantine/core"
-import { useFormik } from "formik"
-import * as Yup from "yup"
-import { IconPlus } from "@tabler/icons-react"
-import Link from "next/link"
-import React, { useState } from "react"
-import { notifications } from "@mantine/notifications"
-import { IconCheck } from "@tabler/icons-react"
-import Empty from "@/components/Empty"
+import Layout from "@/components/Layout";
+import { Badge, Button, Loader, Text } from "@mantine/core";
+import { IconPlus } from "@tabler/icons-react";
+import React, { useState } from "react";
+import Empty from "@/components/Empty";
+import AddAdmin from "@/components/modals/AddAdmin";
+import useSWR from "swr";
+import api from "@/lib/api";
+
+interface Role {
+  _id: string;
+  label: string;
+}
 
 interface Admin {
-  id: string
-  name: string
-  email: string
-  role: "super_admin" | "admin"
-  createdAt: string
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: Role;
+  is_active: boolean;
+  createdAt: string;
 }
 
-const MOCK_ADMINS: Admin[] = [
-  { id: "admin-1", name: "Admin User",    email: "admin@olitrack.co.ke",     role: "super_admin", createdAt: "2024-01-01" },
-  { id: "admin-2", name: "John Mwangi",   email: "j.mwangi@olitrack.co.ke",  role: "admin",       createdAt: "2024-03-15" },
-  { id: "admin-3", name: "Aisha Omar",    email: "a.omar@olitrack.co.ke",    role: "admin",       createdAt: "2024-05-20" },
-  { id: "admin-4", name: "Peter Njoroge", email: "p.njoroge@olitrack.co.ke", role: "admin",       createdAt: "2024-08-10" },
-]
-
-interface AddAdminForm {
-  name: string
-  email: string
-  role: string
-  password: string
+async function fetchAdmins(url: string) {
+  const { data } = await api.get(url);
+  return data;
 }
-
-const AddAdminModal = ({ opened, onClose }: { opened: boolean; onClose: () => void }) => {
-  const formik = useFormik<AddAdminForm>({
-    initialValues: { name: "", email: "", role: "admin", password: "" },
-    validationSchema: Yup.object({
-      name: Yup.string().required("Name is required"),
-      email: Yup.string().email("Invalid email").required("Email is required"),
-      role: Yup.string().required("Role is required"),
-      password: Yup.string().min(6, "Min 6 characters").required("Password is required"),
-    }),
-    onSubmit: async (values, { resetForm, setSubmitting }) => {
-      await new Promise((r) => setTimeout(r, 800))
-      notifications.show({
-        title: "Admin added",
-        message: `${values.name} has been added as an admin.`,
-        color: "green",
-        icon: <IconCheck size={18} />,
-      })
-      resetForm()
-      onClose()
-      setSubmitting(false)
-    },
-  })
-
-  return (
-    <Modal opened={opened} onClose={onClose} title={<h1>Add Admin</h1>} centered>
-      <form onSubmit={formik.handleSubmit}>
-        <div className="p-8 space-y-3">
-          <TextInput
-            label="Full Name"
-            size="xs"
-            placeholder="ex. Jane Doe"
-            {...formik.getFieldProps("name")}
-            error={formik.touched.name && formik.errors.name}
-          />
-          <TextInput
-            label="Email"
-            size="xs"
-            placeholder="ex. jane@olitrack.co.ke"
-            {...formik.getFieldProps("email")}
-            error={formik.touched.email && formik.errors.email}
-          />
-          <Select
-            label="Role"
-            size="xs"
-            data={[
-              { value: "super_admin", label: "Super Admin" },
-              { value: "admin", label: "Admin" },
-            ]}
-            value={formik.values.role}
-            onChange={(v) => formik.setFieldValue("role", v)}
-            error={formik.touched.role && formik.errors.role}
-          />
-          <PasswordInput
-            label="Temporary Password"
-            size="xs"
-            placeholder="Min 6 characters"
-            {...formik.getFieldProps("password")}
-            error={formik.touched.password && formik.errors.password}
-          />
-        </div>
-        <div className="flex justify-end px-8 pb-4">
-          <Button size="xs" type="submit" loading={formik.isSubmitting}>
-            Add Admin
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
 
 function Admins() {
-  const [addOpen, setAddOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false);
+  const { data: admins, isLoading, error } = useSWR<Admin[]>("/admins", fetchAdmins);
 
   return (
     <Layout>
@@ -116,15 +42,28 @@ function Admins() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-slate-700">All Admins</span>
-              <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{MOCK_ADMINS.length}</span>
+              <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                {admins?.length ?? 0}
+              </span>
             </div>
-            <Button size="xs" color="teal" leftSection={<IconPlus size={13} />} onClick={() => setAddOpen(true)}>
+            <Button
+              size="xs"
+              color="teal"
+              leftSection={<IconPlus size={13} />}
+              onClick={() => setAddOpen(true)}
+            >
               Add Admin
             </Button>
           </div>
 
           <div className="overflow-y-auto flex-1">
-            {MOCK_ADMINS.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader size="sm" />
+              </div>
+            ) : error ? (
+              <Text size="sm" c="red" className="p-4">{error?.message ?? "Failed to load admins"}</Text>
+            ) : !admins || admins.length === 0 ? (
               <Empty title="No admins found" />
             ) : (
               <table className="w-full border-collapse">
@@ -132,21 +71,27 @@ function Admins() {
                   <tr>
                     <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Name</th>
                     <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Email</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Phone</th>
                     <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Role</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Created</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wide select-none whitespace-nowrap border-b border-gray-200">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {MOCK_ADMINS.map((admin) => (
-                    <tr key={admin.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  {admins.map((admin) => (
+                    <tr key={admin._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">{admin.name}</td>
                       <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">{admin.email}</td>
+                      <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">{admin.phone}</td>
                       <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
-                        <Badge size="xs" radius={4} color={admin.role === "super_admin" ? "violet" : "blue"} variant="light">
-                          {admin.role === "super_admin" ? "Super Admin" : "Admin"}
+                        <Badge size="xs" radius={4} color="violet" variant="light">
+                          {admin.role?.label ?? "—"}
                         </Badge>
                       </td>
-                      <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">{admin.createdAt}</td>
+                      <td className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
+                        <Badge size="xs" radius={4} color={admin.is_active ? "teal" : "red"} variant="light">
+                          {admin.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -155,10 +100,10 @@ function Admins() {
           </div>
         </div>
 
-        <AddAdminModal opened={addOpen} onClose={() => setAddOpen(false)} />
+        <AddAdmin opened={addOpen} handleClose={() => setAddOpen(false)} />
       </div>
     </Layout>
-  )
+  );
 }
 
-export default Admins
+export default Admins;
