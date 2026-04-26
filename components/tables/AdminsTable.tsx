@@ -17,30 +17,38 @@ import {
 	IconFilter,
 	IconSelector
 } from "@tabler/icons-react";
-import React, { useMemo, useState } from "react";
-import Link from "next/link";
 import moment from "moment";
+import Link from "next/link";
+import React, { useMemo, useState } from "react";
 
-export interface Agent {
+export interface Admin {
 	_id: string;
 	name: string;
 	email: string;
 	phone: string;
-	location: string;
+	role: { _id: string; label: string };
 	is_active: boolean;
-	acc_balance: number;
 	added_by?: { _id: string; name: string; email: string };
+	createdAt: string;
 }
 
-interface AgentsTableProps {
-	agents: Agent[];
+interface AdminsTableProps {
+	admins: Admin[];
 	fetching: boolean;
-	fetchingMore?: boolean;
 	error?: string | null;
-	hasNextPage?: boolean;
-	loadMoreRef?: React.Ref<HTMLDivElement>;
 	globalFilter: string;
 }
+
+const ROLE_COLORS: Record<string, string> = {
+	superadmin: "grape",
+	manager: "indigo",
+	staff: "cyan",
+	viewer: "teal",
+	agent: "orange"
+};
+
+const getRoleColor = (label: string) =>
+	ROLE_COLORS[label?.toLowerCase()] ?? "gray";
 
 const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	if (sorted === "asc")
@@ -56,7 +64,7 @@ const STATUS_OPTIONS = [
 	{ label: "Inactive", value: "false" }
 ] as const;
 
-const StatusFilterHeader = ({ column }: { column: Column<Agent, unknown> }) => {
+const StatusFilterHeader = ({ column }: { column: Column<Admin, unknown> }) => {
 	const filterValue = column.getFilterValue();
 	const isFiltered = filterValue !== undefined;
 
@@ -98,28 +106,76 @@ const StatusFilterHeader = ({ column }: { column: Column<Agent, unknown> }) => {
 	);
 };
 
-const AgentsTable = ({
-	agents,
+const RoleFilterHeader = ({
+	column,
+	roleOptions
+}: {
+	column: Column<Admin, unknown>;
+	roleOptions: string[];
+}) => {
+	const filterValue = column.getFilterValue() as string | undefined;
+	const isFiltered = !!filterValue;
+
+	return (
+		<div className="flex items-center justify-between gap-2">
+			<span>Role</span>
+			<Menu shadow="md" width={140} position="bottom-end">
+				<Menu.Target>
+					<button
+						type="button"
+						onClick={(e) => e.stopPropagation()}
+						className={`p-0.5 rounded transition-colors hover:bg-gray-200 ${
+							isFiltered ? "text-green-500" : "text-gray-400"
+						}`}>
+						<IconFilter size={10} />
+					</button>
+				</Menu.Target>
+				<Menu.Dropdown>
+					<Menu.Item
+						fz="xs"
+						fw={!filterValue ? 600 : undefined}
+						c={!filterValue ? "blue" : undefined}
+						onClick={() => column.setFilterValue(undefined)}>
+						<span className="text-[0.6rem]">All</span>
+					</Menu.Item>
+					{roleOptions.map((role) => {
+						const isActive = filterValue === role;
+						return (
+							<Menu.Item
+								key={role}
+								fz="xs"
+								fw={isActive ? 600 : undefined}
+								c={isActive ? "blue" : undefined}
+								onClick={() => column.setFilterValue(role)}>
+								<span className="text-[0.6rem]">{role.toUpperCase()}</span>
+							</Menu.Item>
+						);
+					})}
+				</Menu.Dropdown>
+			</Menu>
+		</div>
+	);
+};
+
+export default function AdminsTable({
+	admins,
 	fetching,
-	fetchingMore,
 	error,
-	hasNextPage,
-	loadMoreRef,
 	globalFilter
-}: AgentsTableProps) => {
+}: AdminsTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-	const columns = useMemo<ColumnDef<Agent>[]>(
+	const roleOptions = useMemo(
+		() => [...new Set(admins.map((a) => a.role?.label).filter(Boolean))],
+		[admins]
+	);
+
+	const columns = useMemo<ColumnDef<Admin>[]>(
 		() => [
 			{
 				accessorKey: "name",
-				header: "Full Name"
-			},
-			{
-				accessorKey: "phone",
-				header: "Phone",
-				enableSorting: false
+				header: "Name"
 			},
 			{
 				accessorKey: "email",
@@ -127,14 +183,30 @@ const AgentsTable = ({
 				enableSorting: false
 			},
 			{
-				accessorKey: "acc_balance",
-				header: "Acc. Balance",
-				cell: ({ getValue }) =>
-					`Ksh ${((getValue() as number) ?? 0).toLocaleString()}`
+				accessorKey: "phone",
+				header: "Phone",
+				enableSorting: false
 			},
 			{
-				accessorKey: "location",
-				header: "Location"
+				id: "role",
+				filterFn: "equals",
+				enableSorting: false,
+				accessorFn: (row) => row.role?.label ?? "",
+				header: ({ column }) => (
+					<RoleFilterHeader column={column} roleOptions={roleOptions} />
+				),
+				cell: ({ getValue }) => {
+					const label = getValue() as string;
+					return (
+						<Badge
+							size="xs"
+							radius={4}
+							color={getRoleColor(label)}
+							variant="light">
+							{label || "—"}
+						</Badge>
+					);
+				}
 			},
 			{
 				accessorKey: "is_active",
@@ -157,18 +229,17 @@ const AgentsTable = ({
 			{
 				id: "added_by",
 				header: "Added By",
+				enableSorting: false,
 				accessorFn: (row) => row.added_by?.name ?? "",
 				cell: ({ getValue }) =>
 					(getValue() as string) || <span className="text-gray-400">—</span>
 			},
-
 			{
 				accessorKey: "createdAt",
 				header: "Added On",
 				cell: ({ getValue }) =>
 					moment(getValue() as string).format("Do MMM YYYY")
 			},
-
 			{
 				id: "actions",
 				header: "",
@@ -176,18 +247,18 @@ const AgentsTable = ({
 				cell: ({ row }) => (
 					<Link
 						className="underline"
-						href={`/agents/${row.original._id}`}
+						href={`/admins/${row.original._id}`}
 						passHref>
 						more
 					</Link>
 				)
 			}
 		],
-		[]
+		[roleOptions]
 	);
 
 	const table = useReactTable({
-		data: agents,
+		data: admins,
 		columns,
 		state: { sorting, globalFilter, columnFilters },
 		onSortingChange: setSorting,
@@ -259,14 +330,6 @@ const AgentsTable = ({
 					))}
 				</tbody>
 			</table>
-
-			{hasNextPage && (
-				<div ref={loadMoreRef} className="flex justify-center py-4">
-					{fetchingMore && <Loader size="xs" />}
-				</div>
-			)}
 		</div>
 	);
-};
-
-export default AgentsTable;
+}

@@ -41,7 +41,11 @@ async function fetchRoles(url: string) {
   return data;
 }
 
-const AddAdmin = React.memo(({ opened, handleClose }: ModalProps) => {
+interface AddAdminProps extends ModalProps {
+  onSuccess?: () => void;
+}
+
+const AddAdmin = React.memo(({ opened, handleClose, onSuccess }: AddAdminProps) => {
   const { trigger } = useSWRMutation("/admins/create", createAdmin);
   const { data: roles, error: rolesError } = useSWR<Role[]>(
     "/roles",
@@ -55,6 +59,7 @@ const AddAdmin = React.memo(({ opened, handleClose }: ModalProps) => {
       try {
         await trigger(values);
         toast.success("Admin added successfully");
+        onSuccess?.();
         resetForm();
         handleClose();
       } catch (err: any) {

@@ -1,7 +1,5 @@
-import Empty from "@/components/Empty";
-import { Badge, Loader, Menu, Text } from "@mantine/core";
+import { Kbd, Loader, Text } from "@mantine/core";
 import {
-	Column,
 	ColumnDef,
 	ColumnFiltersState,
 	SortingState,
@@ -14,26 +12,28 @@ import {
 import {
 	IconChevronDown,
 	IconChevronUp,
-	IconFilter,
 	IconSelector
 } from "@tabler/icons-react";
-import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import React, { useState } from "react";
 import moment from "moment";
 
-export interface Agent {
+export interface Asset {
 	_id: string;
 	name: string;
-	email: string;
-	phone: string;
-	location: string;
-	is_active: boolean;
-	acc_balance: number;
+	make?: string;
+	model?: string;
+	type?: string;
+	chassis?: string;
+	engine?: string;
+	yom?: string;
+	owner?: { _id: string; name: string; email: string; phone: string };
 	added_by?: { _id: string; name: string; email: string };
+	createdAt: string;
 }
 
-interface AgentsTableProps {
-	agents: Agent[];
+interface AssetsTableProps {
+	assets: Asset[];
 	fetching: boolean;
 	fetchingMore?: boolean;
 	error?: string | null;
@@ -50,144 +50,80 @@ const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	return <IconSelector size={11} className="inline ml-1 text-slate-300" />;
 };
 
-const STATUS_OPTIONS = [
-	{ label: "All", value: "" },
-	{ label: "Active", value: "true" },
-	{ label: "Inactive", value: "false" }
-] as const;
-
-const StatusFilterHeader = ({ column }: { column: Column<Agent, unknown> }) => {
-	const filterValue = column.getFilterValue();
-	const isFiltered = filterValue !== undefined;
-
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span>Status</span>
-			<Menu shadow="md" width={120} position="bottom-end">
-				<Menu.Target>
-					<button
-						type="button"
-						onClick={(e) => e.stopPropagation()}
-						className={`p-0.5 rounded transition-colors hover:bg-gray-200 ${
-							isFiltered ? "text-green-500" : "text-gray-400"
-						}`}>
-						<IconFilter size={10} />
-					</button>
-				</Menu.Target>
-				<Menu.Dropdown>
-					{STATUS_OPTIONS.map(({ label, value }) => {
-						const isActive = String(filterValue ?? "") === value;
-						return (
-							<Menu.Item
-								key={value}
-								fz="xs"
-								fw={isActive ? 600 : undefined}
-								c={isActive ? "green" : undefined}
-								onClick={() =>
-									column.setFilterValue(
-										value === "" ? undefined : value === "true"
-									)
-								}>
-								<span className="text-[0.6rem]">{label}</span>
-							</Menu.Item>
-						);
-					})}
-				</Menu.Dropdown>
-			</Menu>
-		</div>
-	);
-};
-
-const AgentsTable = ({
-	agents,
+const AssetsTable = ({
+	assets,
 	fetching,
 	fetchingMore,
 	error,
 	hasNextPage,
 	loadMoreRef,
 	globalFilter
-}: AgentsTableProps) => {
+}: AssetsTableProps) => {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-	const columns = useMemo<ColumnDef<Agent>[]>(
-		() => [
-			{
-				accessorKey: "name",
-				header: "Full Name"
-			},
-			{
-				accessorKey: "phone",
-				header: "Phone",
-				enableSorting: false
-			},
-			{
-				accessorKey: "email",
-				header: "Email",
-				enableSorting: false
-			},
-			{
-				accessorKey: "acc_balance",
-				header: "Acc. Balance",
-				cell: ({ getValue }) =>
-					`Ksh ${((getValue() as number) ?? 0).toLocaleString()}`
-			},
-			{
-				accessorKey: "location",
-				header: "Location"
-			},
-			{
-				accessorKey: "is_active",
-				filterFn: "equals",
-				enableSorting: false,
-				header: ({ column }) => <StatusFilterHeader column={column} />,
-				cell: ({ getValue }) => {
-					const active = getValue() as boolean;
-					return (
-						<Badge
-							size="xs"
-							radius={4}
-							color={active ? "teal" : "red"}
-							variant="light">
-							{active ? "Active" : "Inactive"}
-						</Badge>
-					);
-				}
-			},
-			{
-				id: "added_by",
-				header: "Added By",
-				accessorFn: (row) => row.added_by?.name ?? "",
-				cell: ({ getValue }) =>
-					(getValue() as string) || <span className="text-gray-400">—</span>
-			},
-
-			{
-				accessorKey: "createdAt",
-				header: "Added On",
-				cell: ({ getValue }) =>
-					moment(getValue() as string).format("Do MMM YYYY")
-			},
-
-			{
-				id: "actions",
-				header: "",
-				enableSorting: false,
-				cell: ({ row }) => (
-					<Link
-						className="underline"
-						href={`/agents/${row.original._id}`}
-						passHref>
-						more
-					</Link>
-				)
+	const columns: ColumnDef<Asset>[] = [
+		{ accessorKey: "name", header: "Asset Name" },
+		{
+			id: "make_model",
+			header: "Make / Model",
+			enableSorting: false,
+			accessorFn: (row) =>
+				[row.make, row.model].filter(Boolean).join(" ") || "",
+			cell: ({ getValue }) =>
+				(getValue() as string) || <span className="text-gray-400">—</span>
+		},
+		{
+			accessorKey: "type",
+			header: "Type",
+			enableSorting: false,
+			cell: ({ getValue }) => {
+				const val = getValue() as string;
+				return val ? (
+					<Kbd size="xs">{val.toUpperCase()}</Kbd>
+				) : (
+					<span className="text-gray-400">—</span>
+				);
 			}
-		],
-		[]
-	);
+		},
+		{
+			id: "owner",
+			header: "Customer",
+			enableSorting: false,
+			accessorFn: (row) => row.owner?.name ?? "",
+			cell: ({ getValue }) =>
+				(getValue() as string) || <span className="text-gray-400">—</span>
+		},
+		{
+			id: "added_by",
+			header: "Added By",
+			enableSorting: false,
+			accessorFn: (row) => row.added_by?.name ?? "",
+			cell: ({ getValue }) =>
+				(getValue() as string) || <span className="text-gray-400">—</span>
+		},
+		{
+			accessorKey: "createdAt",
+			header: "Added On",
+			cell: ({ getValue }) => moment(getValue() as string).format("Do MMM YYYY")
+		},
+		{
+			id: "actions",
+			header: "",
+			enableSorting: false,
+			cell: ({ row }) => (
+				<Link
+					className="underline"
+					href={`/assets/${row.original._id}`}
+					passHref>
+					more
+				</Link>
+			)
+		}
+	];
 
 	const table = useReactTable({
-		data: agents,
+		data: assets,
 		columns,
 		state: { sorting, globalFilter, columnFilters },
 		onSortingChange: setSorting,
@@ -269,4 +205,4 @@ const AgentsTable = ({
 	);
 };
 
-export default AgentsTable;
+export default AssetsTable;

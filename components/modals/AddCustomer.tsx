@@ -39,7 +39,11 @@ async function createUser(_url: string, { arg }: { arg: CustomerFormValues }) {
 	return data;
 }
 
-const AddCustomer = React.memo(({ opened, handleClose }: ModalProps) => {
+interface AddCustomerProps extends ModalProps {
+	onSuccess?: () => void;
+}
+
+const AddCustomer = React.memo(({ opened, handleClose, onSuccess }: AddCustomerProps) => {
 	const { trigger } = useSWRMutation("/users/create", createUser);
 
 	const formik = useFormik<CustomerFormValues>({
@@ -55,6 +59,7 @@ const AddCustomer = React.memo(({ opened, handleClose }: ModalProps) => {
 			try {
 				await trigger(values);
 				toast.success("Customer created successfully");
+				onSuccess?.();
 				resetForm();
 				handleClose();
 			} catch (err: any) {

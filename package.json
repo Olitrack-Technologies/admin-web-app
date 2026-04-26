@@ -48,6 +48,7 @@
 	"devDependencies": {
 		"@capacitor/cli": "^7.4.3",
 		"@eslint/eslintrc": "^3",
+		"@faker-js/faker": "^10.4.0",
 		"@parcel/watcher": "^2.5.1",
 		"@svgr/webpack": "^8.1.0",
 		"@tailwindcss/postcss": "^4",

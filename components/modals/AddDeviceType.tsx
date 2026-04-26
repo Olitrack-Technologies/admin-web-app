@@ -50,7 +50,11 @@ async function createDeviceType(
 	return data;
 }
 
-const AddDeviceType = React.memo(({ opened, handleClose }: ModalProps) => {
+interface AddDeviceTypeProps extends ModalProps {
+	onSuccess?: () => void;
+}
+
+const AddDeviceType = React.memo(({ opened, handleClose, onSuccess }: AddDeviceTypeProps) => {
 	const { trigger } = useSWRMutation("/device-types/create", createDeviceType);
 
 	const formik = useFormik<AddDeviceTypeForm>({
@@ -67,6 +71,7 @@ const AddDeviceType = React.memo(({ opened, handleClose }: ModalProps) => {
 			try {
 				await trigger(values);
 				toast.success(`Device type "${values.name}" created`);
+				onSuccess?.();
 				editor?.commands.clearContent();
 				resetForm();
 				handleClose();
