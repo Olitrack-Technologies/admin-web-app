@@ -175,7 +175,7 @@ const AgentsTable = ({
 				enableSorting: false,
 				cell: ({ row }) => (
 					<Link
-						className="underline"
+						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap"
 						href={`/agents/${row.original._id}`}
 						passHref>
 						more
@@ -217,7 +217,7 @@ const AgentsTable = ({
 	const rows = table.getRowModel().rows;
 
 	return (
-		<div className="overflow-y-auto h-[calc(100vh-260px)]">
+		<div className="overflow-y-auto h-[calc(100vh-150px)]">
 			<table className="w-full border-collapse">
 				<thead className="sticky top-0 bg-gray-50 z-10">
 					{table.getHeaderGroups().map((headerGroup) => (

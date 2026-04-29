@@ -1,7 +1,5 @@
-import Empty from "@/components/Empty";
-import { Loader, Menu, Text } from "@mantine/core";
+import { Badge, Loader, Text } from "@mantine/core";
 import {
-	Column,
 	ColumnDef,
 	ColumnFiltersState,
 	SortingState,
@@ -14,26 +12,36 @@ import {
 import {
 	IconChevronDown,
 	IconChevronUp,
-	IconFilter,
+	IconFileText,
 	IconSelector
 } from "@tabler/icons-react";
-import Link from "next/link";
 import React, { useMemo, useState } from "react";
+import DeliveryNoteModal from "@/components/modals/DeliveryNoteModal";
 import moment from "moment";
 
-export interface Customer {
+export interface Sale {
 	_id: string;
-	name: string;
-	email: string;
-	phone: string;
-	client_type: string;
-	location: string;
-	added_by?: { _id: string; name: string; email: string };
+	product: {
+		_id: string;
+		name: string;
+		category: string;
+		price: number;
+	} | null;
+	agent: { _id: string; name: string; email: string; phone: string } | null;
+	buyer_name: string;
+	buyer_phone: string;
+	buyer_email: string;
+	quantity: number;
+	sell_price: number;
+	payment_method: "cash" | "mpesa";
+	tx_code: string;
+	from: string;
+	destination: string;
 	createdAt: string;
 }
 
-interface CustomersTableProps {
-	customers: Customer[];
+interface SalesTableProps {
+	sales: Sale[];
 	fetching: boolean;
 	fetchingMore?: boolean;
 	error?: string | null;
@@ -50,115 +58,104 @@ const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	return <IconSelector size={11} className="inline ml-1 text-slate-300" />;
 };
 
-const ClientTypeFilterHeader = ({
-	column,
-	options
-}: {
-	column: Column<Customer, unknown>;
-	options: string[];
-}) => {
-	const filterValue = column.getFilterValue() as string | undefined;
-	const isFiltered = !!filterValue;
-
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span>Client Type</span>
-			<Menu shadow="md" width={140} position="bottom-end">
-				<Menu.Target>
-					<button
-						type="button"
-						onClick={(e) => e.stopPropagation()}
-						className={`p-0.5 rounded transition-colors hover:bg-gray-200 ${
-							isFiltered ? "text-green-500" : "text-gray-400"
-						}`}>
-						<IconFilter size={10} />
-					</button>
-				</Menu.Target>
-				<Menu.Dropdown>
-					<Menu.Item
-						fz="xs"
-						fw={!filterValue ? 600 : undefined}
-						c={!filterValue ? "blue" : undefined}
-						onClick={() => column.setFilterValue(undefined)}>
-						<span className="text-[0.6rem]">All</span>
-					</Menu.Item>
-					{options.map((type) => {
-						const isActive = filterValue === type;
-						return (
-							<Menu.Item
-								key={type}
-								fz="xs"
-								fw={isActive ? 600 : undefined}
-								c={isActive ? "blue" : undefined}
-								onClick={() => column.setFilterValue(type)}>
-								<span className="text-[0.6rem]">{type}</span>
-							</Menu.Item>
-						);
-					})}
-				</Menu.Dropdown>
-			</Menu>
-		</div>
-	);
-};
-
-const CustomersTable = ({
-	customers,
+const SalesTable = ({
+	sales,
 	fetching,
 	fetchingMore,
 	error,
 	hasNextPage,
 	loadMoreRef,
 	globalFilter
-}: CustomersTableProps) => {
+}: SalesTableProps) => {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+	const [deliverySale, setDeliverySale] = useState<Sale | null>(null);
 
-	const clientTypeOptions = useMemo(
-		() => [...new Set(customers.map((c) => c.client_type).filter(Boolean))],
-		[customers]
-	);
-
-	const columns = useMemo<ColumnDef<Customer>[]>(
+	const columns = useMemo<ColumnDef<Sale>[]>(
 		() => [
 			{
-				accessorKey: "name",
-				header: "Full Name"
+				id: "product",
+				header: "Product",
+				accessorFn: (row) => row.product?.name ?? "",
+				cell: ({ row }) => (
+					<div>
+						<div className="font-medium">
+							{row.original.product?.name ?? (
+								<span className="text-gray-400">—</span>
+							)}
+						</div>
+						<div className="text-[10px] text-gray-400">
+							{row.original.product?.category ?? ""}
+						</div>
+					</div>
+				)
 			},
 			{
-				accessorKey: "email",
-				header: "Email",
-				enableSorting: false
+				accessorKey: "buyer_name",
+				header: "Buyer Name",
+				cell: ({ getValue }) => getValue() as string
 			},
 			{
-				accessorKey: "phone",
-				header: "Phone",
-				enableSorting: false
-			},
-			{
-				accessorKey: "client_type",
-				filterFn: "equals",
+				accessorKey: "buyer_phone",
+				header: "Buyer Phone",
 				enableSorting: false,
-				header: ({ column }) => (
-					<ClientTypeFilterHeader column={column} options={clientTypeOptions} />
-				),
+				cell: ({ getValue }) => getValue() as string
+			},
+
+			{
+				accessorKey: "quantity",
+				header: "Qty",
+				cell: ({ getValue }) => getValue() as number
+			},
+			{
+				accessorKey: "sell_price",
+				header: "Sale Price",
 				cell: ({ getValue }) =>
-					(getValue() as string) || <span className="text-gray-400">—</span>
+					`Ksh ${((getValue() as number) ?? 0).toLocaleString()}`
 			},
 			{
-				accessorKey: "location",
-				header: "Location"
-			},
-			{
-				id: "added_by",
-				header: "Added By",
+				id: "discount",
+				header: "Discount",
 				enableSorting: false,
-				accessorFn: (row) => row.added_by?.name ?? "",
+				accessorFn: (row) => row.quantity * row.product!.price - row.sell_price,
+				cell: ({ getValue }) =>
+					`Ksh ${((getValue() as number) ?? 0).toLocaleString()}`
+			},
+			{
+				accessorKey: "payment_method",
+				header: "Payment",
+				enableSorting: false,
+				cell: ({ getValue }) => (
+					<Badge
+						size="xs"
+						radius={4}
+						variant="light"
+						color={getValue() === "mpesa" ? "green" : "gray"}>
+						{getValue() === "mpesa" ? "M-Pesa" : "Cash"}
+					</Badge>
+				)
+			},
+			{
+				accessorKey: "tx_code",
+				header: "Tx Code",
+				enableSorting: false,
+				cell: ({ getValue }) =>
+					(getValue() as string) ? (
+						<span className="font-mono">{getValue() as string}</span>
+					) : (
+						<span className="text-gray-400">—</span>
+					)
+			},
+			{
+				accessorKey: "destination",
+				header: "Destination",
+				enableSorting: false,
 				cell: ({ getValue }) =>
 					(getValue() as string) || <span className="text-gray-400">—</span>
 			},
 			{
 				accessorKey: "createdAt",
-				header: "Added On",
+				header: "Date",
 				cell: ({ getValue }) =>
 					moment(getValue() as string).format("Do MMM YYYY")
 			},
@@ -166,21 +163,21 @@ const CustomersTable = ({
 				id: "actions",
 				header: "",
 				enableSorting: false,
-				cell: ({ row }) => (
-					<Link
-						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap"
-						href={`/customers/${row.original._id}`}
-						passHref>
-						more
-					</Link>
-				)
+				cell: ({ row }) =>
+					(row.original.destination || row.original.from) && (
+						<button
+							onClick={() => setDeliverySale(row.original)}
+							className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap">
+							Delivery Note
+						</button>
+					)
 			}
 		],
-		[clientTypeOptions]
+		[]
 	);
 
 	const table = useReactTable({
-		data: customers,
+		data: sales,
 		columns,
 		state: { sorting, globalFilter, columnFilters },
 		onSortingChange: setSorting,
@@ -244,7 +241,7 @@ const CustomersTable = ({
 							{row.getVisibleCells().map((cell) => (
 								<td
 									key={cell.id}
-									className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
+									className="px-3 py-2 text-[11px] text-gray-700 whitespace-nowrap">
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}
 								</td>
 							))}
@@ -258,8 +255,14 @@ const CustomersTable = ({
 					{fetchingMore && <Loader size="xs" />}
 				</div>
 			)}
+
+			<DeliveryNoteModal
+				sale={deliverySale}
+				opened={deliverySale !== null}
+				onClose={() => setDeliverySale(null)}
+			/>
 		</div>
 	);
 };
 
-export default CustomersTable;
+export default SalesTable;

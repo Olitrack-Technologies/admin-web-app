@@ -1,10 +1,9 @@
-import { Badge, Kbd, Loader, Menu, Text } from "@mantine/core";
+import { Badge, Kbd, Menu, Text } from "@mantine/core";
 import {
 	Column,
 	ColumnDef,
 	ColumnFiltersState,
 	SortingState,
-	filterFns,
 	flexRender,
 	getCoreRowModel,
 	getFilteredRowModel,
@@ -21,17 +20,16 @@ import Link from "next/link";
 import React, { useMemo, useState } from "react";
 import moment from "moment";
 
-export interface Device {
+export interface AssetDevice {
 	_id: string;
 	serial: string;
 	traccar_id: string;
 	type?: { _id: string; name: string };
-	asset?: { _id: string; name: string; owner?: { _id: string; name: string } };
-	fitting_agent?: { _id: string; name: string };
-	added_by?: { _id: string; name: string };
-	fitting_date?: string;
+	fitting_agent?: { _id: string; name: string; phone?: string };
 	fitting_location?: string;
+	fitting_date?: string;
 	expiry: string;
+	added_by?: { _id: string; name: string };
 	createdAt: string;
 }
 
@@ -54,7 +52,7 @@ const SUBSCRIPTION_OPTIONS: { value: SubscriptionStatus; label: string }[] = [
 const SubscriptionFilterHeader = ({
 	column
 }: {
-	column: Column<Device, unknown>;
+	column: Column<AssetDevice, unknown>;
 }) => {
 	const filterValue = column.getFilterValue() as SubscriptionStatus | undefined;
 	const isFiltered = !!filterValue;
@@ -108,29 +106,15 @@ const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	return <IconSelector size={11} className="inline ml-1 text-slate-300" />;
 };
 
-interface DevicesTableProps {
-	devices: Device[];
-	fetching: boolean;
-	fetchingMore?: boolean;
-	error?: string | null;
-	hasNextPage?: boolean;
-	loadMoreRef?: React.Ref<HTMLDivElement>;
-	globalFilter: string;
+interface AssetDevicesTableProps {
+	devices: AssetDevice[];
 }
 
-const DevicesTable = ({
-	devices,
-	fetching,
-	fetchingMore,
-	error,
-	hasNextPage,
-	loadMoreRef,
-	globalFilter
-}: DevicesTableProps) => {
+const AssetDevicesTable = ({ devices }: AssetDevicesTableProps) => {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-	const columns = useMemo<ColumnDef<Device>[]>(
+	const columns = useMemo<ColumnDef<AssetDevice>[]>(
 		() => [
 			{
 				accessorKey: "serial",
@@ -145,38 +129,6 @@ const DevicesTable = ({
 					const val = getValue() as string;
 					return val ? (
 						<Kbd size="xs">{val}</Kbd>
-					) : (
-						<span className="text-gray-400">—</span>
-					);
-				}
-			},
-			{
-				id: "asset",
-				header: "Asset",
-				enableSorting: false,
-				accessorFn: (row) => row.asset?.name ?? "",
-				cell: ({ row }) =>
-					row.original.asset ? (
-						<Link
-							className="hover:underline"
-							href={`/assets/${row.original.asset._id}`}>
-							{row.original.asset.name}
-						</Link>
-					) : (
-						<span className="text-gray-400">—</span>
-					)
-			},
-			{
-				id: "customer",
-				header: "Customer",
-				enableSorting: false,
-				accessorFn: (row) => row.asset?.owner?.name ?? "",
-				cell: ({ row }) => {
-					const owner = row.original.asset?.owner;
-					return owner ? (
-						<Link className="hover:underline" href={`/customers/${owner._id}`}>
-							{owner.name}
-						</Link>
 					) : (
 						<span className="text-gray-400">—</span>
 					);
@@ -199,9 +151,17 @@ const DevicesTable = ({
 				}
 			},
 			{
+				accessorKey: "fitting_location",
+				header: "Location",
+				enableSorting: false,
+				cell: ({ getValue }) => {
+					const val = getValue() as string | undefined;
+					return val || <span className="text-gray-400">—</span>;
+				}
+			},
+			{
 				accessorKey: "fitting_date",
 				header: "Install Date",
-				enableSorting: true,
 				cell: ({ getValue }) => {
 					const val = getValue() as string | undefined;
 					return val ? (
@@ -214,7 +174,6 @@ const DevicesTable = ({
 			{
 				accessorKey: "expiry",
 				header: "Expiry",
-				enableSorting: true,
 				cell: ({ getValue }) =>
 					moment(getValue() as string).format("Do MMM YYYY")
 			},
@@ -251,8 +210,8 @@ const DevicesTable = ({
 				enableSorting: false,
 				cell: ({ row }) => (
 					<Link
-						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap"
-						href={`/devices/${row.original._id}`}>
+						href={`/devices/${row.original._id}`}
+						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap">
 						more
 					</Link>
 				)
@@ -264,27 +223,18 @@ const DevicesTable = ({
 	const table = useReactTable({
 		data: devices,
 		columns,
-		state: { sorting, globalFilter, columnFilters },
+		state: { sorting, columnFilters },
 		onSortingChange: setSorting,
 		onColumnFiltersChange: setColumnFilters,
-		globalFilterFn: "includesString",
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getFilteredRowModel: getFilteredRowModel()
 	});
 
-	if (fetching) {
+	if (!devices.length) {
 		return (
-			<div className="flex justify-center py-8">
-				<Loader size="sm" />
-			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<Text size="sm" c="red" className="p-4">
-				{error}
+			<Text size="xs" c="dimmed" className="py-4 text-center">
+				No devices attached to this asset.
 			</Text>
 		);
 	}
@@ -292,9 +242,9 @@ const DevicesTable = ({
 	const rows = table.getRowModel().rows;
 
 	return (
-		<div className="overflow-y-auto h-[calc(100vh-150px)]">
+		<div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] mt-2">
 			<table className="w-full border-collapse">
-				<thead className="sticky top-0 bg-gray-50 z-10">
+				<thead className="bg-gray-50">
 					{table.getHeaderGroups().map((headerGroup) => (
 						<tr key={headerGroup.id}>
 							{headerGroup.headers.map((header) => (
@@ -304,7 +254,7 @@ const DevicesTable = ({
 										header.column.getCanSort()
 											? "cursor-pointer hover:text-gray-800"
 											: ""
-									}`}
+									} ${header.id === "actions" ? "sticky right-0 z-20 bg-gray-50" : ""}`}
 									onClick={header.column.getToggleSortingHandler()}>
 									{flexRender(
 										header.column.columnDef.header,
@@ -326,7 +276,7 @@ const DevicesTable = ({
 							{row.getVisibleCells().map((cell) => (
 								<td
 									key={cell.id}
-									className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
+									className={`px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap${cell.column.id === "actions" ? " sticky right-0 bg-white" : ""}`}>
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}
 								</td>
 							))}
@@ -334,14 +284,8 @@ const DevicesTable = ({
 					))}
 				</tbody>
 			</table>
-
-			{hasNextPage && (
-				<div ref={loadMoreRef} className="flex justify-center py-4">
-					{fetchingMore && <Loader size="xs" />}
-				</div>
-			)}
 		</div>
 	);
 };
 
-export default DevicesTable;
+export default AssetDevicesTable;

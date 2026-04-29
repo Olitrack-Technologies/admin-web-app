@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import AddDevice from "@/components/modals/AddDevice";
+import AddAsset from "@/components/modals/additions/AddAsset";
 import AssetsTable, { Asset } from "@/components/tables/AssetsTable";
 import { Button, Input } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
@@ -103,7 +103,7 @@ function Assets() {
 				</div>
 			</div>
 
-			<AddDevice
+			<AddAsset
 				opened={openAdd}
 				handleClose={() => setOpenAdd(false)}
 				onSuccess={() => mutate()}

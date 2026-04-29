@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import AddAdmin from "@/components/modals/AddAdmin";
+import AddAdmin from "@/components/modals/additions/AddAdmin";
 import AdminsTable, { Admin } from "@/components/tables/AdminsTable";
 import { Button, Input } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";

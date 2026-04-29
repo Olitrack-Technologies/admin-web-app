@@ -7,28 +7,30 @@ import { IconPlus, IconSearch } from "@tabler/icons-react";
 import React, { useEffect, useRef, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import api from "@/lib/api";
+import ProductsTable, { Product } from "@/components/tables/ProductsTable";
+import AddProduct from "@/components/modals/additions/AddProduct";
 
 const PAGE_SIZE = 20;
 
-interface AgentsPage {
-	data: Agent[];
+interface ProductsPage {
+	data: Product[];
 	total: number;
 	hasMore: boolean;
 }
 
-async function fetchPage(url: string): Promise<AgentsPage> {
+async function fetchPage(url: string): Promise<ProductsPage> {
 	const { data } = await api.get(url);
 	return data;
 }
 
-function Agents() {
+function Products() {
 	const [openAdd, setOpenAdd] = useState(false);
 	const [search, setSearch] = useState("");
 	const [debouncedSearch] = useDebouncedValue(search, 350);
 	const loaderRef = useRef<HTMLDivElement | null>(null);
 
 	const getKey = (pageIndex: number): string =>
-		`/agents?page=${pageIndex + 1}&limit=${PAGE_SIZE}`;
+		`/inventory?page=${pageIndex + 1}&limit=${PAGE_SIZE}`;
 
 	const {
 		data: pages,
@@ -37,11 +39,11 @@ function Agents() {
 		isLoading,
 		error,
 		mutate
-	} = useSWRInfinite<AgentsPage>(getKey, fetchPage, {
+	} = useSWRInfinite<ProductsPage>(getKey, fetchPage, {
 		revalidateFirstPage: false
 	});
 
-	const agents: Agent[] = pages?.flatMap((p) => p.data) ?? [];
+	const products: Product[] = pages?.flatMap((p) => p.data) ?? [];
 	const total = pages?.[0]?.total ?? 0;
 	const hasMore = pages?.[pages.length - 1]?.hasMore ?? false;
 	const fetchingMore = size > (pages?.length ?? 0);
@@ -66,7 +68,7 @@ function Agents() {
 					<div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
 						<div className="flex items-center gap-2">
 							<span className="text-[13px] font-semibold text-slate-700">
-								All Agents
+								All Products
 							</span>
 							<span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
 								{total}
@@ -75,7 +77,7 @@ function Agents() {
 						<div className="flex items-center gap-2">
 							<Input
 								size="xs"
-								placeholder="Search agents..."
+								placeholder="Search product..."
 								leftSection={<IconSearch color="lightgray" size={13} />}
 								value={search}
 								onChange={(e) => setSearch(e.currentTarget.value)}
@@ -86,24 +88,25 @@ function Agents() {
 								color="teal"
 								onClick={() => setOpenAdd(true)}
 								leftSection={<IconPlus size={13} />}>
-								Add agent
+								Add product
 							</Button>
 						</div>
 					</div>
 
-					<AgentsTable
-						agents={agents}
+					<ProductsTable
+						products={products}
 						fetching={isLoading}
 						fetchingMore={fetchingMore}
 						error={error?.message ?? null}
 						hasNextPage={hasMore}
 						loadMoreRef={loaderRef}
 						globalFilter={debouncedSearch}
+						onSuccess={() => mutate()}
 					/>
 				</div>
 			</div>
 
-			<AddAgent
+			<AddProduct
 				opened={openAdd}
 				handleClose={() => setOpenAdd(false)}
 				onSuccess={() => mutate()}
@@ -112,4 +115,4 @@ function Agents() {
 	);
 }
 
-export default Agents;
+export default Products;

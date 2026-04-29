@@ -113,9 +113,8 @@ const AssetsTable = ({
 			enableSorting: false,
 			cell: ({ row }) => (
 				<Link
-					className="underline"
 					href={`/assets/${row.original._id}`}
-					passHref>
+					className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap">
 					more
 				</Link>
 			)
@@ -153,7 +152,7 @@ const AssetsTable = ({
 	const rows = table.getRowModel().rows;
 
 	return (
-		<div className="overflow-y-auto h-[calc(100vh-260px)]">
+		<div className="overflow-y-auto h-[calc(100vh-150px)]">
 			<table className="w-full border-collapse">
 				<thead className="sticky top-0 bg-gray-50 z-10">
 					{table.getHeaderGroups().map((headerGroup) => (

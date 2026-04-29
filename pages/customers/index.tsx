@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import AddCustomer from "@/components/modals/AddCustomer";
+import AddCustomer from "@/components/modals/additions/AddCustomer";
 import CustomersTable, { Customer } from "@/components/tables/CustomersTable";
 import { Button, Input } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";

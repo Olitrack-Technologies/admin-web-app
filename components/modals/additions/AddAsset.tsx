@@ -5,7 +5,9 @@ import {
 	TextInput,
 	NumberInput,
 	Stepper,
-	Group
+	Group,
+	Kbd,
+	Radio
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
 import { useFormik } from "formik";
@@ -23,10 +25,11 @@ import moment from "moment";
 interface DeviceType {
 	_id: string;
 	name: string;
-	protocol: string;
+	protocol: { _id: string; name: string } | null;
 	installation_cost: number;
 	subscription_cost: number;
 	expiry_months: number;
+	product?: { _id: string; name: string; category: string; price: number };
 }
 
 interface Agent {
@@ -45,7 +48,7 @@ interface User {
 	client_type: string;
 }
 
-interface AddDeviceForm {
+interface AddAssetForm {
 	// Asset Information
 	asset_name: string;
 	asset_make: string;
@@ -58,6 +61,8 @@ interface AddDeviceForm {
 	// Device Information
 	device_type_id: string;
 	installation_cost: number;
+	payment_method: "cash" | "mpesa";
+	tx_code: string;
 	device_sim: string;
 	device_serial: string;
 	fitting_location: string;
@@ -88,6 +93,14 @@ const validationSchema = Yup.object({
 	device_serial: Yup.string().required("Device serial is required"),
 	fitting_location: Yup.string(),
 	fitting_date: Yup.date().required("Fitting date is required"),
+	payment_method: Yup.string()
+		.oneOf(["cash", "mpesa"])
+		.required("Payment method is required"),
+	tx_code: Yup.string().when("payment_method", {
+		is: "mpesa",
+		then: (schema) => schema.required("Transaction code is required"),
+		otherwise: (schema) => schema.notRequired()
+	}),
 
 	// Agent Information
 	fitting_agent: Yup.string().nullable(),
@@ -96,7 +109,7 @@ const validationSchema = Yup.object({
 	customer_id: Yup.string().required("Customer is required")
 });
 
-async function createDevice(_url: string, { arg }: { arg: AddDeviceForm }) {
+async function createAsset(_url: string, { arg }: { arg: AddAssetForm }) {
 	const { data } = await api.post("/assets/create", arg);
 	return data;
 }
@@ -125,14 +138,14 @@ const ReviewRow = ({ label, value }: { label: string; value?: string }) => (
 	</div>
 );
 
-interface AddDeviceProps extends ModalProps {
+interface AddAssetProps extends ModalProps {
 	onSuccess?: () => void;
 }
 
-const AddDevice = React.memo(
-	({ opened, handleClose, onSuccess }: AddDeviceProps) => {
+const AddAsset = React.memo(
+	({ opened, handleClose, onSuccess }: AddAssetProps) => {
 		const [active, setActive] = useState(0);
-		const { trigger } = useSWRMutation("/assets/create", createDevice);
+		const { trigger } = useSWRMutation("/assets/create", createAsset);
 		const { data: deviceTypes, error: deviceTypesError } = useSWR<DeviceType[]>(
 			"/device-types",
 			fetchDeviceTypes
@@ -152,7 +165,7 @@ const AddDevice = React.memo(
 			searchUsers
 		);
 
-		const formik = useFormik<AddDeviceForm>({
+		const formik = useFormik<AddAssetForm>({
 			initialValues: {
 				// Asset Information
 				asset_name: "",
@@ -166,6 +179,8 @@ const AddDevice = React.memo(
 				// Device Information
 				device_type_id: "",
 				installation_cost: 0,
+				payment_method: "cash",
+				tx_code: "",
 				device_sim: "",
 				device_serial: "",
 				fitting_location: "",
@@ -177,7 +192,6 @@ const AddDevice = React.memo(
 			},
 			validationSchema,
 			onSubmit: async (values, { setSubmitting, resetForm }) => {
-				console.log(values);
 				try {
 					await trigger(values);
 					toast.success("Device added successfully");
@@ -214,10 +228,14 @@ const AddDevice = React.memo(
 			}
 		}, [formik.values.device_type_id, deviceTypes]);
 
+		const selectedDeviceType = deviceTypes?.find(
+			(dt) => dt._id === formik.values.device_type_id
+		);
+
 		const deviceTypeOptions =
 			deviceTypes?.map((dt) => ({
 				value: dt._id,
-				label: `${dt.name} (${dt.protocol})`
+				label: `${dt.name} (${dt.protocol?.name ?? ""})`
 			})) || [];
 
 		const agentOptions =
@@ -255,7 +273,7 @@ const AddDevice = React.memo(
 								<div className="space-y-4 mt-4">
 									<div className="grid grid-cols-2 gap-3">
 										<TextInput
-											label="Asset Identifier"
+											label="Asset Name"
 											placeholder="e.g. KAA 001Z"
 											size="xs"
 											required
@@ -351,7 +369,7 @@ const AddDevice = React.memo(
 										/>
 									</div>
 
-									<div className="grid grid-cols-2 gap-3">
+									<div className="space-y-4 mt-4">
 										<Select
 											label="Device Type"
 											placeholder="Select device type"
@@ -371,28 +389,77 @@ const AddDevice = React.memo(
 											}
 											disabled={!!deviceTypesError || !deviceTypes}
 										/>
-										<NumberInput
-											label="Installation Cost Paid"
-											placeholder="0"
-											size="xs"
-											withAsterisk
-											prefix="Ksh. "
-											thousandSeparator=","
-											required
-											min={1}
-											value={formik.values.installation_cost}
-											onChange={(value) =>
-												formik.setFieldValue("installation_cost", value || 0)
-											}
-											onBlur={() =>
-												formik.setFieldTouched("installation_cost", true)
-											}
-											error={
-												formik.touched.installation_cost &&
-												formik.errors.installation_cost
-											}
-											disabled={formik.values.fitting_agent !== null}
-										/>
+
+										{!formik.values.fitting_agent &&
+											selectedDeviceType?.product && (
+												<div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+													<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+														Product details
+													</p>
+													<div className="grid grid-cols-2 gap-3">
+														<div>
+															<p className="text-[12px] font-medium text-slate-700">
+																{selectedDeviceType.product.name}
+															</p>
+														</div>
+														<div>
+															<Kbd>{selectedDeviceType.product.category}</Kbd>
+														</div>
+													</div>
+													<NumberInput
+														label="Installation Cost"
+														size="xs"
+														withAsterisk
+														prefix="Ksh. "
+														thousandSeparator=","
+														min={0}
+														value={formik.values.installation_cost ?? undefined}
+														onChange={(val) =>
+															formik.setFieldValue(
+																"installation_cost",
+																val !== "" ? val : null
+															)
+														}
+														onBlur={() =>
+															formik.setFieldTouched("installation_cost", true)
+														}
+														error={
+															formik.touched.installation_cost &&
+															formik.errors.installation_cost
+														}
+													/>
+													<Radio.Group
+														label="Payment Method"
+														size="xs"
+														withAsterisk
+														value={formik.values.payment_method}
+														onChange={(val) => {
+															formik.setFieldValue("payment_method", val);
+															if (val === "cash")
+																formik.setFieldValue("tx_code", "");
+														}}>
+														<div className="flex gap-4 mt-1">
+															<Radio value="cash" label="Cash" size="xs" />
+															<Radio value="mpesa" label="M-Pesa" size="xs" />
+														</div>
+													</Radio.Group>
+													{formik.values.payment_method === "mpesa" && (
+														<TextInput
+															label="M-Pesa Transaction Code"
+															placeholder="e.g. QJK4X2PLMN"
+															size="xs"
+															withAsterisk
+															{...formik.getFieldProps("tx_code")}
+															error={
+																formik.touched.tx_code && formik.errors.tx_code
+															}
+														/>
+													)}
+												</div>
+											)}
+									</div>
+
+									<div className="grid grid-cols-2 gap-3">
 										<TextInput
 											label="Device SIM"
 											placeholder="e.g. 254700000000"
@@ -476,9 +543,9 @@ const AddDevice = React.memo(
 
 							<Stepper.Step label="Review" description="Confirm details">
 								<div className="space-y-4 mt-4">
-									<div className="grid grid-cols-2 gap-x-8 gap-y-4">
+									<div className="grid grid-cols-2 gap-x-8 gap-y-8">
 										<div>
-											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-700 mb-3">
 												Asset Information
 											</p>
 											<div className="space-y-2">
@@ -510,7 +577,7 @@ const AddDevice = React.memo(
 										</div>
 
 										<div>
-											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-700 mb-3">
 												Device Information
 											</p>
 											<div className="space-y-2">
@@ -533,6 +600,7 @@ const AddDevice = React.memo(
 												<ReviewRow
 													label="Installation Cost"
 													value={
+														!formik.values.fitting_agent &&
 														formik.values.installation_cost
 															? `Ksh ${formik.values.installation_cost.toLocaleString()}`
 															: undefined
@@ -556,7 +624,7 @@ const AddDevice = React.memo(
 										</div>
 
 										<div>
-											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-700 mb-3">
 												Customer
 											</p>
 											<div className="space-y-2">
@@ -568,7 +636,7 @@ const AddDevice = React.memo(
 										</div>
 
 										<div>
-											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+											<p className="text-[11px] font-semibold uppercase tracking-widest text-slate-700 mb-3">
 												Agent
 											</p>
 											<div className="space-y-2">
@@ -620,6 +688,6 @@ const AddDevice = React.memo(
 	}
 );
 
-AddDevice.displayName = "AddDevice";
+AddAsset.displayName = "AddAsset";
 
-export default AddDevice;
+export default AddAsset;

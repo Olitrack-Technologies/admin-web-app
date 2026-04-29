@@ -1,4 +1,3 @@
-import Empty from "@/components/Empty";
 import { Badge, Loader, Menu, Text } from "@mantine/core";
 import {
 	Column,
@@ -17,38 +16,31 @@ import {
 	IconFilter,
 	IconSelector
 } from "@tabler/icons-react";
-import moment from "moment";
 import React, { useMemo, useState } from "react";
-import AdminDetailModal from "@/components/modals/AdminDetailModal";
+import moment from "moment";
+import ProductDetailModal from "@/components/modals/ProductDetailModal";
 
-export interface Admin {
+export interface Product {
 	_id: string;
 	name: string;
-	email: string;
-	phone: string;
-	role: { _id: string; label: string };
-	is_active: boolean;
+	category: string;
+	quantity: number;
+	threshold: number;
+	price: number;
 	added_by?: { _id: string; name: string; email: string };
 	createdAt: string;
 }
 
-interface AdminsTableProps {
-	admins: Admin[];
+interface ProductTableProps {
+	products: Product[];
 	fetching: boolean;
+	fetchingMore?: boolean;
 	error?: string | null;
+	hasNextPage?: boolean;
+	loadMoreRef?: React.Ref<HTMLDivElement>;
 	globalFilter: string;
+	onSuccess?: () => void;
 }
-
-const ROLE_COLORS: Record<string, string> = {
-	superadmin: "grape",
-	manager: "indigo",
-	staff: "cyan",
-	viewer: "teal",
-	agent: "orange"
-};
-
-const getRoleColor = (label: string) =>
-	ROLE_COLORS[label?.toLowerCase()] ?? "gray";
 
 const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	if (sorted === "asc")
@@ -58,68 +50,20 @@ const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	return <IconSelector size={11} className="inline ml-1 text-slate-300" />;
 };
 
-const STATUS_OPTIONS = [
-	{ label: "All", value: "" },
-	{ label: "Active", value: "true" },
-	{ label: "Inactive", value: "false" }
-] as const;
-
-const StatusFilterHeader = ({ column }: { column: Column<Admin, unknown> }) => {
-	const filterValue = column.getFilterValue();
-	const isFiltered = filterValue !== undefined;
-
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span>Status</span>
-			<Menu shadow="md" width={120} position="bottom-end">
-				<Menu.Target>
-					<button
-						type="button"
-						onClick={(e) => e.stopPropagation()}
-						className={`p-0.5 rounded transition-colors hover:bg-gray-200 ${
-							isFiltered ? "text-green-500" : "text-gray-400"
-						}`}>
-						<IconFilter size={10} />
-					</button>
-				</Menu.Target>
-				<Menu.Dropdown>
-					{STATUS_OPTIONS.map(({ label, value }) => {
-						const isActive = String(filterValue ?? "") === value;
-						return (
-							<Menu.Item
-								key={value}
-								fz="xs"
-								fw={isActive ? 600 : undefined}
-								c={isActive ? "green" : undefined}
-								onClick={() =>
-									column.setFilterValue(
-										value === "" ? undefined : value === "true"
-									)
-								}>
-								<span className="text-[0.6rem]">{label}</span>
-							</Menu.Item>
-						);
-					})}
-				</Menu.Dropdown>
-			</Menu>
-		</div>
-	);
-};
-
-const RoleFilterHeader = ({
+const CategoryFilterHeader = ({
 	column,
-	roleOptions
+	options
 }: {
-	column: Column<Admin, unknown>;
-	roleOptions: string[];
+	column: Column<Product, unknown>;
+	options: string[];
 }) => {
 	const filterValue = column.getFilterValue() as string | undefined;
 	const isFiltered = !!filterValue;
 
 	return (
 		<div className="flex items-center justify-between gap-2">
-			<span>Role</span>
-			<Menu shadow="md" width={140} position="bottom-end">
+			<span>Category</span>
+			<Menu shadow="md" width={150} position="bottom-end">
 				<Menu.Target>
 					<button
 						type="button"
@@ -138,16 +82,16 @@ const RoleFilterHeader = ({
 						onClick={() => column.setFilterValue(undefined)}>
 						<span className="text-[0.6rem]">All</span>
 					</Menu.Item>
-					{roleOptions.map((role) => {
-						const isActive = filterValue === role;
+					{options.map((opt) => {
+						const isActive = filterValue === opt;
 						return (
 							<Menu.Item
-								key={role}
+								key={opt}
 								fz="xs"
 								fw={isActive ? 600 : undefined}
 								c={isActive ? "blue" : undefined}
-								onClick={() => column.setFilterValue(role)}>
-								<span className="text-[0.6rem]">{role.toUpperCase()}</span>
+								onClick={() => column.setFilterValue(opt)}>
+								<span className="text-[0.6rem]">{opt}</span>
 							</Menu.Item>
 						);
 					})}
@@ -157,85 +101,77 @@ const RoleFilterHeader = ({
 	);
 };
 
-export default function AdminsTable({
-	admins,
+const ProductsTable = ({
+	products,
 	fetching,
+	fetchingMore,
 	error,
-	globalFilter
-}: AdminsTableProps) {
+	hasNextPage,
+	loadMoreRef,
+	globalFilter,
+	onSuccess
+}: ProductTableProps) => {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-	const [selectedAdmin, setSelectedAdmin] = useState<Admin | null>(null);
-	const [modalOpen, setModalOpen] = useState(false);
-	const [selectedTab, setSelectedTab] = useState<"manage" | "disable">(
-		"manage"
-	);
+	const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+	const [detailOpen, setDetailOpen] = useState(false);
+	const [selectedTab, setSelectedTab] = useState<
+		"sell" | "restock" | "edit" | "delete"
+	>("sell");
 
-	const openModal = (admin: Admin, tab: "manage" | "disable") => {
-		setSelectedAdmin(admin);
+	const openModal = (
+		product: Product,
+		tab: "sell" | "restock" | "edit" | "delete"
+	) => {
+		setSelectedProduct(product);
 		setSelectedTab(tab);
-		setModalOpen(true);
+		setDetailOpen(true);
 	};
 
-	const roleOptions = useMemo(
-		() => [...new Set(admins.map((a) => a.role?.label).filter(Boolean))],
-		[admins]
+	const categoryOptions = useMemo(
+		() => [...new Set(products.map((p) => p.category).filter(Boolean))],
+		[products]
 	);
 
-	const columns = useMemo<ColumnDef<Admin>[]>(
+	const columns = useMemo<ColumnDef<Product>[]>(
 		() => [
+			{ accessorKey: "name", header: "Product Name" },
 			{
-				accessorKey: "name",
-				header: "Name"
-			},
-			{
-				accessorKey: "email",
-				header: "Email",
-				enableSorting: false
-			},
-			{
-				accessorKey: "phone",
-				header: "Phone",
-				enableSorting: false
-			},
-			{
-				id: "role",
+				accessorKey: "category",
 				filterFn: "equals",
 				enableSorting: false,
-				accessorFn: (row) => row.role?.label ?? "",
 				header: ({ column }) => (
-					<RoleFilterHeader column={column} roleOptions={roleOptions} />
-				),
-				cell: ({ getValue }) => {
-					const label = getValue() as string;
+					<CategoryFilterHeader column={column} options={categoryOptions} />
+				)
+			},
+			{
+				accessorKey: "quantity",
+				header: "Qty",
+				cell: ({ getValue, row }) => {
+					const qty = getValue() as number;
+					const low = qty <= row.original.threshold;
 					return (
-						<Badge
-							size="xs"
-							radius={4}
-							color={getRoleColor(label)}
-							variant="light">
-							{label || "—"}
-						</Badge>
+						<div className="flex items-center gap-1.5">
+							<span>{qty}</span>
+							{low && (
+								<Badge color="orange" size="xs" variant="light" radius={4}>
+									Low
+								</Badge>
+							)}
+						</div>
 					);
 				}
 			},
 			{
-				accessorKey: "is_active",
-				filterFn: "equals",
-				enableSorting: false,
-				header: ({ column }) => <StatusFilterHeader column={column} />,
-				cell: ({ getValue }) => {
-					const active = getValue() as boolean;
-					return (
-						<Badge
-							size="xs"
-							radius={4}
-							color={active ? "teal" : "red"}
-							variant="light">
-							{active ? "Active" : "Inactive"}
-						</Badge>
-					);
-				}
+				accessorKey: "threshold",
+				header: "Threshold",
+				enableSorting: false
+			},
+			{
+				accessorKey: "price",
+				header: "Unit Price",
+				cell: ({ getValue }) =>
+					`Ksh ${((getValue() as number) ?? 0).toLocaleString()}`
 			},
 			{
 				id: "added_by",
@@ -258,24 +194,34 @@ export default function AdminsTable({
 				cell: ({ row }) => (
 					<div className="flex items-center gap-2">
 						<button
+							className="text-teal-600 hover:underline"
+							onClick={() => openModal(row.original, "sell")}>
+							sell
+						</button>
+						<button
 							className="text-blue-600 hover:underline"
-							onClick={() => openModal(row.original, "manage")}>
-							manage
+							onClick={() => openModal(row.original, "restock")}>
+							restock
+						</button>
+						<button
+							className="text-amber-600 hover:underline"
+							onClick={() => openModal(row.original, "edit")}>
+							edit
 						</button>
 						<button
 							className="text-red-500 hover:underline"
-							onClick={() => openModal(row.original, "disable")}>
-							disable
+							onClick={() => openModal(row.original, "delete")}>
+							delete
 						</button>
 					</div>
 				)
 			}
 		],
-		[roleOptions]
+		[categoryOptions]
 	);
 
 	const table = useReactTable({
-		data: admins,
+		data: products,
 		columns,
 		state: { sorting, globalFilter, columnFilters },
 		onSortingChange: setSorting,
@@ -335,7 +281,11 @@ export default function AdminsTable({
 					{rows.map((row) => (
 						<tr
 							key={row.id}
-							className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+							className={`border-b transition-colors ${
+								row.original.quantity <= row.original.threshold
+									? "bg-red-500/[0.05] hover:bg-red-500/10 border-red-100"
+									: "border-gray-100 hover:bg-gray-50"
+							}`}>
 							{row.getVisibleCells().map((cell) => (
 								<td
 									key={cell.id}
@@ -348,13 +298,24 @@ export default function AdminsTable({
 				</tbody>
 			</table>
 
-			<AdminDetailModal
-				admin={selectedAdmin}
-				opened={modalOpen}
+			{hasNextPage && (
+				<div ref={loadMoreRef} className="flex justify-center py-4">
+					{fetchingMore && <Loader size="xs" />}
+				</div>
+			)}
+
+			<ProductDetailModal
+				product={selectedProduct}
+				opened={detailOpen}
 				defaultTab={selectedTab}
-				onClose={() => setModalOpen(false)}
-				onSuccess={() => setModalOpen(false)}
+				onClose={() => setDetailOpen(false)}
+				onSuccess={() => {
+					setDetailOpen(false);
+					onSuccess?.();
+				}}
 			/>
 		</div>
 	);
-}
+};
+
+export default ProductsTable;

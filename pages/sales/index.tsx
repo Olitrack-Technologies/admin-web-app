@@ -1,47 +1,44 @@
 import Layout from "@/components/Layout";
-import AddAgent from "@/components/modals/additions/AddAgent";
-import AgentsTable, { Agent } from "@/components/tables/AgentsTable";
-import { Button, Input } from "@mantine/core";
+import SalesTable, { Sale } from "@/components/tables/SalesTable";
+import { Input } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconPlus, IconSearch } from "@tabler/icons-react";
-import React, { useEffect, useRef, useState } from "react";
+import { IconSearch } from "@tabler/icons-react";
+import React, { useEffect, useRef } from "react";
 import useSWRInfinite from "swr/infinite";
 import api from "@/lib/api";
 
 const PAGE_SIZE = 20;
 
-interface AgentsPage {
-	data: Agent[];
+interface SalesPage {
+	data: Sale[];
 	total: number;
 	hasMore: boolean;
 }
 
-async function fetchPage(url: string): Promise<AgentsPage> {
+async function fetchPage(url: string): Promise<SalesPage> {
 	const { data } = await api.get(url);
 	return data;
 }
 
-function Agents() {
-	const [openAdd, setOpenAdd] = useState(false);
-	const [search, setSearch] = useState("");
+function Sales() {
+	const [search, setSearch] = React.useState("");
 	const [debouncedSearch] = useDebouncedValue(search, 350);
 	const loaderRef = useRef<HTMLDivElement | null>(null);
 
 	const getKey = (pageIndex: number): string =>
-		`/agents?page=${pageIndex + 1}&limit=${PAGE_SIZE}`;
+		`/sales?page=${pageIndex + 1}&limit=${PAGE_SIZE}`;
 
 	const {
 		data: pages,
 		size,
 		setSize,
 		isLoading,
-		error,
-		mutate
-	} = useSWRInfinite<AgentsPage>(getKey, fetchPage, {
+		error
+	} = useSWRInfinite<SalesPage>(getKey, fetchPage, {
 		revalidateFirstPage: false
 	});
 
-	const agents: Agent[] = pages?.flatMap((p) => p.data) ?? [];
+	const sales: Sale[] = pages?.flatMap((p) => p.data) ?? [];
 	const total = pages?.[0]?.total ?? 0;
 	const hasMore = pages?.[pages.length - 1]?.hasMore ?? false;
 	const fetchingMore = size > (pages?.length ?? 0);
@@ -66,33 +63,24 @@ function Agents() {
 					<div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
 						<div className="flex items-center gap-2">
 							<span className="text-[13px] font-semibold text-slate-700">
-								All Agents
+								All Sales
 							</span>
 							<span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
 								{total}
 							</span>
 						</div>
-						<div className="flex items-center gap-2">
-							<Input
-								size="xs"
-								placeholder="Search agents..."
-								leftSection={<IconSearch color="lightgray" size={13} />}
-								value={search}
-								onChange={(e) => setSearch(e.currentTarget.value)}
-								className="w-[200px]"
-							/>
-							<Button
-								size="xs"
-								color="teal"
-								onClick={() => setOpenAdd(true)}
-								leftSection={<IconPlus size={13} />}>
-								Add agent
-							</Button>
-						</div>
+						<Input
+							size="xs"
+							placeholder="Search sales..."
+							leftSection={<IconSearch color="lightgray" size={13} />}
+							value={search}
+							onChange={(e) => setSearch(e.currentTarget.value)}
+							className="w-[200px]"
+						/>
 					</div>
 
-					<AgentsTable
-						agents={agents}
+					<SalesTable
+						sales={sales}
 						fetching={isLoading}
 						fetchingMore={fetchingMore}
 						error={error?.message ?? null}
@@ -102,14 +90,8 @@ function Agents() {
 					/>
 				</div>
 			</div>
-
-			<AddAgent
-				opened={openAdd}
-				handleClose={() => setOpenAdd(false)}
-				onSuccess={() => mutate()}
-			/>
 		</Layout>
 	);
 }
 
-export default Agents;
+export default Sales;

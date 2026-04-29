@@ -1,1258 +1,319 @@
 import {
-  Badge,
-  Button,
-  Checkbox,
-  Code,
-  Divider,
-  Group,
-  Modal,
-  Notification,
-  NumberInput,
-  PasswordInput,
-  Radio,
-  Select,
-  Tabs,
-  TagsInput,
-  Textarea,
-  TextInput,
-} from "@mantine/core"
-import { DateInput } from "@mantine/dates"
-import { IconPlus } from "@tabler/icons-react"
-import Link from "next/link"
-import React, { useCallback, useEffect, useState } from "react"
-import { ASSET_TYPES } from "./add"
-import { useRouter } from "next/router"
-import moment from "moment"
-import Layout from "@/components/Layout"
-import { Asset, Customer } from "../customers/[id]"
-import { useFormik } from "formik"
-import * as Yup from "yup"
-import AgentSelect from "@/components/AgentSelect"
-import CustomerSelect from "@/components/CustomerSelect"
+	Alert,
+	Button,
+	Divider,
+	Kbd,
+	Loader,
+	PasswordInput,
+	Tabs,
+	Text
+} from "@mantine/core";
+import {
+	IconAlertTriangle,
+	IconChevronLeft,
+	IconPlus
+} from "@tabler/icons-react";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import React, { useState } from "react";
+import moment from "moment";
+import { toast } from "react-toastify";
+import Layout from "@/components/Layout";
+import useSWR from "swr";
+import api from "@/lib/api";
+import AssetDevicesTable, {
+	AssetDevice
+} from "@/components/tables/AssetDevicesTable";
+import EditAssetModal from "@/components/modals/EditAssetModal";
+import TransferOwnershipModal from "@/components/modals/TransferOwnershipModal";
+import AddDeviceModal from "@/components/modals/additions/AddDevice";
 
-// -----------------------------
-// Mock Data
-// -----------------------------
-const MOCK_ASSET: FullAsset = {
-  id: "1",
-  name: "KDK 027X",
-  description: "Toyota Harrier 2025",
-  ident: "1223434",
-  type: "car",
-  customer: {
-    clientType: "Individual",
-    email: "s2kinyanjui@gmail.com",
-    fullName: "Stephen Kinyanjui",
-    phoneNumber: "+254748920306",
-    location: "Ngara",
-    id: "1",
-  },
-  createdAt: "23rd December 2025",
-  devices: [
-    {
-      id: "1",
-      iDate: new Date(),
-      iLocation: "Ngara, NRB",
-      type: "st_901",
-      expiry: new Date(),
-      agent: {
-        name: "Stephen Kinyanjui",
-        id: "1",
-        phoneNumber: "254748920306",
-        email: "s2kinyanjui@gmail.com",
-      },
-    },
-  ],
+interface AssetDetail {
+	_id: string;
+	name: string;
+	make?: string;
+	model?: string;
+	type?: string;
+	yom?: string;
+	chassis?: string;
+	engine?: string;
+	owner: { _id: string; name: string; email: string; phone: string };
+	added_by?: { _id: string; name: string; email: string };
+	createdAt: string;
 }
 
-const DEVICE_TYPES = [
-  { label: "TRACKER(ST-901)", value: "st_901" },
-  { label: "SPEED LMT(SPL01)", value: "spl_01" },
-]
-
-interface FullAsset extends Omit<Asset, "customer"> {
-  customer: Customer
-  devices: Device[]
+interface AssetResponse {
+	asset: AssetDetail;
+	devices: AssetDevice[];
 }
 
-export interface Device {
-  id: string
-  iDate: Date
-  iLocation: string
-  type: string
-  agent: Agent
-  expiry: Date
+async function fetchAsset(url: string): Promise<AssetResponse> {
+	const { data } = await api.get(url);
+	return data;
 }
 
-interface Agent {
-  id: string
-  name: string
-  phoneNumber: string
-  email: string
+const InfoField = ({
+	label,
+	value
+}: {
+	label: string;
+	value?: string | null;
+}) => (
+	<div className="col-span-1">
+		<span className="block text-gray-500 text-[0.6rem] mb-1 uppercase tracking-wide">
+			{label}
+		</span>
+		{value ? (
+			<p className="text-[0.8rem]">{value}</p>
+		) : (
+			<span className="text-gray-400 text-[0.8rem]">—</span>
+		)}
+	</div>
+);
+
+function BasicInformation({
+	asset,
+	devices
+}: {
+	asset: AssetDetail;
+	devices: AssetDevice[];
+}) {
+	const [editOpen, setEditOpen] = useState(false);
+	const [transferOpen, setTransferOpen] = useState(false);
+	const [addDeviceOpen, setAddDeviceOpen] = useState(false);
+
+	return (
+		<div className="p-4">
+			<br />
+			<Divider label="Asset Information" labelPosition="left" />
+			<div className="grid gap-4 grid-cols-4 px-6 py-6">
+				<InfoField label="Name" value={asset.name} />
+				<InfoField label="Make" value={asset.make} />
+				<InfoField label="Model" value={asset.model} />
+				<div className="col-span-1">
+					<span className="block text-gray-500 text-[0.6rem] mb-1 uppercase tracking-wide">
+						Type
+					</span>
+					{asset.type ? (
+						<Kbd size="xs">{asset.type.toUpperCase()}</Kbd>
+					) : (
+						<span className="text-gray-400 text-[0.8rem]">—</span>
+					)}
+				</div>
+
+				<InfoField label="Chassis" value={asset.chassis} />
+				<InfoField label="Engine" value={asset.engine} />
+				<InfoField label="Added By" value={asset.added_by?.name} />
+				<InfoField
+					label="Added On"
+					value={moment(asset.createdAt).format("Do MMM YYYY")}
+				/>
+			</div>
+			<div className="flex justify-end px-6 pb-2">
+				<Button size="xs" variant="outline" onClick={() => setEditOpen(true)}>
+					Edit
+				</Button>
+			</div>
+
+			<br />
+			<Divider label="Owner Information" labelPosition="left" />
+			<div className="grid gap-8 grid-cols-4 p-6">
+				<InfoField label="Name" value={asset.owner.name} />
+				<InfoField label="Phone" value={asset.owner.phone} />
+				<InfoField label="Email" value={asset.owner.email} />
+				<div className="col-span-1 flex items-end pb-0.5">
+					<Link
+						href={`/customers/${asset.owner._id}`}
+						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap">
+						see profile
+					</Link>
+				</div>
+			</div>
+
+			<div className="flex justify-end px-6 pb-2">
+				<Button
+					size="xs"
+					variant="outline"
+					color="orange"
+					onClick={() => setTransferOpen(true)}>
+					Transfer Ownership
+				</Button>
+			</div>
+
+			<br />
+			<Divider label="Devices" labelPosition="left" />
+			<div className="flex justify-end px-6 pt-3 pb-1">
+				<Button
+					leftSection={<IconPlus size={14} />}
+					size="xs"
+					onClick={() => setAddDeviceOpen(true)}>
+					Add Device
+				</Button>
+			</div>
+			<AssetDevicesTable devices={devices} />
+
+			<EditAssetModal
+				asset={asset}
+				opened={editOpen}
+				onClose={() => setEditOpen(false)}
+				onSuccess={() => setEditOpen(false)}
+			/>
+			<TransferOwnershipModal
+				assetId={asset._id}
+				opened={transferOpen}
+				onClose={() => setTransferOpen(false)}
+				onSuccess={() => setTransferOpen(false)}
+			/>
+			<AddDeviceModal
+				assetId={asset._id}
+				opened={addDeviceOpen}
+				onClose={() => setAddDeviceOpen(false)}
+				onSuccess={() => setAddDeviceOpen(false)}
+			/>
+		</div>
+	);
 }
 
-const editAssetValidationSchema = Yup.object({})
-const editDeviceValidationSchema = Yup.object({})
+function DeleteAssetPanel({
+	asset,
+	devices
+}: {
+	asset: AssetDetail;
+	devices: AssetDevice[];
+}) {
+	const router = useRouter();
+	const [password, setPassword] = useState("");
+	const [loading, setLoading] = useState(false);
+	const hasDevices = devices.length > 0;
 
-// -----------------------------
-// Exported Component
-// -----------------------------
+	const handleDelete = async () => {
+		try {
+			setLoading(true);
+			await api.delete(`/assets/${asset._id}`, { data: { password } });
+			toast.success("Asset deleted");
+			router.push("/assets");
+		} catch (err: any) {
+			toast.error(err?.response?.data?.error ?? "Failed to delete asset");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		<div className="max-w-md mx-auto mt-8 space-y-5 p-4">
+			<Alert
+				color="red"
+				variant="light"
+				icon={<IconAlertTriangle size={16} />}
+				title="Permanent action">
+				<Text size="xs">
+					Deleting <strong>{asset.name}</strong> is irreversible. All associated
+					records will be permanently removed from the system.
+				</Text>
+			</Alert>
+
+			{hasDevices && (
+				<Alert color="orange" variant="light" title="Devices still attached">
+					<Text size="xs">
+						This asset has <strong>{devices.length}</strong> attached device
+						{devices.length !== 1 ? "s" : ""}. Detach all devices before
+						deleting the asset.
+					</Text>
+				</Alert>
+			)}
+
+			<div className=" p-4 space-y-4 ">
+				<PasswordInput
+					label="Confirm your password"
+					placeholder="••••••••"
+					size="xs"
+					value={password}
+					onChange={(e) => setPassword(e.currentTarget.value)}
+					disabled={hasDevices}
+				/>
+
+				<Button
+					color="red"
+					size="xs"
+					fullWidth
+					loading={loading}
+					disabled={hasDevices || !password.trim() || loading}
+					onClick={handleDelete}>
+					Delete
+				</Button>
+			</div>
+		</div>
+	);
+}
+
 function AssetSingle() {
-  // Hooks
-  const router = useRouter()
-  const { id } = router.query
+	const router = useRouter();
+	const { id } = router.query;
 
-  // States & Refs
-  const [asset, setAsset] = useState<FullAsset>(MOCK_ASSET)
-  const [fetching, setFetching] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+	const { data, error, isLoading } = useSWR<AssetResponse>(
+		id ? `/assets/${id}` : null,
+		fetchAsset
+	);
 
-  // Simulate fetch
-  useEffect(() => {
-    setFetching(true)
-    setError(null)
+	if (isLoading || !id) {
+		return (
+			<Layout>
+				<div className="flex justify-center py-8">
+					<Loader size="sm" />
+				</div>
+			</Layout>
+		);
+	}
 
-    const timeout = setTimeout(() => {
-      try {
-        setAsset(MOCK_ASSET)
-        setFetching(false)
-      } catch (error) {
-        setError("Failed to load customer")
-        setFetching(false)
-      }
-    }, 300)
+	if (error || !data) {
+		return (
+			<Layout>
+				<div className="p-4">
+					<Text c="red" size="sm">
+						Failed to load asset
+					</Text>
+				</div>
+			</Layout>
+		);
+	}
 
-    return () => clearTimeout(timeout)
-  }, [])
+	return (
+		<Layout>
+			<div className="bg-white rounded-md border border-slate-200 p-4 h-screen overflow-y-auto">
+				<Button
+					variant="subtle"
+					size="xs"
+					color="gray"
+					mb="sm"
+					leftSection={<IconChevronLeft size={13} />}
+					onClick={() => router.push("/assets")}>
+					Back to Assets
+				</Button>
+				<Tabs
+					defaultValue="basic"
+					variant="pills"
+					classNames={{
+						list: "bg-slate-100 rounded-xl border-none gap-0.5 w-fit mx-auto",
+						tab: "rounded-lg font-medium text-slate-500 text-[0.7rem]! data-[active]:bg-white data-[active]:shadow-sm data-[active]:text-slate-800 data-[active]:font-semibold"
+					}}>
+					<Tabs.List justify="center">
+						<Tabs.Tab value="basic">Basic</Tabs.Tab>
+						<Tabs.Tab value="delete" className="data-[active]:text-red-600">
+							Delete
+						</Tabs.Tab>
+					</Tabs.List>
 
-  if (fetching)
-    return (
-      <Layout>
-        <p>Loading</p>
-      </Layout>
-    )
+					<Tabs.Panel value="basic">
+						<BasicInformation asset={data.asset} devices={data.devices} />
+					</Tabs.Panel>
 
-  if (error)
-    return (
-      <Layout>
-        <p>Error</p>
-      </Layout>
-    )
-
-  return (
-    <Layout>
-
-      <div className="bg-white rounded-md border border-slate-200 p-4 h-[calc(100vh-170px)] overflow-y-auto">
-        <Tabs defaultValue="basic">
-          <Tabs.List>
-            <Tabs.Tab value="basic">Basic Information</Tabs.Tab>
-            <Tabs.Tab value="playback">Route playback</Tabs.Tab>
-            <Tabs.Tab value="reports">Reports</Tabs.Tab>
-            <Tabs.Tab value="delete" color="red">
-              <span className="text-red-500">Delete</span>
-            </Tabs.Tab>
-          </Tabs.List>
-
-          <Tabs.Panel value="basic">
-            <BasicInformation assetId={asset?.id} />
-          </Tabs.Panel>
-          <Tabs.Panel value="playback">
-            <div />
-          </Tabs.Panel>
-          <Tabs.Panel value="reports"><div /></Tabs.Panel>
-          <Tabs.Panel value="delete"><div /></Tabs.Panel>
-        </Tabs>
-      </div>
-    </Layout>
-  )
+					<Tabs.Panel value="delete">
+						<DeleteAssetPanel asset={data.asset} devices={data.devices} />
+					</Tabs.Panel>
+				</Tabs>
+			</div>
+		</Layout>
+	);
 }
 
-// -----------------------------
-// Basic Information Component
-// -----------------------------
-const BasicInformation = ({ assetId: _assetId }: { assetId: string }) => {
-  // Hooks
-
-  // State & Refs
-  const [editDeviceOpen, setEditDeviceOpen] = useState<boolean>(false)
-  const [editAssetOpen, setEditAssetOpen] = useState<boolean>(false)
-  const [openAddDevice, setOpenAddDevice] = useState<boolean>(false)
-
-  // Functions
-
-  const handleCloseEditDevice = useCallback(() => {
-    setEditDeviceOpen(false)
-  }, [])
-
-  const handleCloseEditAsset = useCallback(() => {
-    setEditAssetOpen(false)
-  }, [])
-
-  const handleOpenEditAssetModal = () => {
-    setEditAssetOpen(true)
-  }
-
-  const handleOpenEditDeviceModal = (_deviceId: string) => {
-    setEditDeviceOpen(true)
-  }
-
-  const handleCloseAddDevice = () => {
-    setOpenAddDevice(false)
-  }
-
-  const subscriptionStatus = (
-    expiry: Date
-  ): "hasEnded" | "endsSoon" | "okay" => {
-    const now = moment()
-    const target = moment(expiry)
-
-    if (target.isSameOrBefore(now, "day")) {
-      return "hasEnded"
-    }
-
-    const diffInMonths = target.diff(now, "months", true)
-    if (diffInMonths < 1) {
-      return "endsSoon"
-    }
-
-    return "okay"
-  }
-
-  return (
-    <div className="p-4">
-      <br />
-      <Divider label="Asset Information" labelPosition="left" />
-
-      {/* Asset Information */}
-
-      <div>
-        <div className="grid gap-12 grid-cols-4 p-8">
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">Name</span>
-            <p>{MOCK_ASSET.name}</p>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">
-              Description
-            </span>
-            <p>{MOCK_ASSET.description}</p>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">Type</span>
-            <Code>{MOCK_ASSET.type.toUpperCase()}</Code>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">
-              Created At
-            </span>
-            <p>{MOCK_ASSET.createdAt}</p>
-          </div>
-        </div>
-        <div className="flex float-right">
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={handleOpenEditAssetModal}
-          >
-            Edit
-          </Button>
-        </div>
-        <br />
-        <br />
-      </div>
-
-      <Divider label="Customer Information" labelPosition="left" />
-
-      {/* Customer Information */}
-
-      <div>
-        <div className="grid gap-12 grid-cols-4 p-8">
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">Name</span>
-            <p>{MOCK_ASSET.customer.fullName}</p>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">
-              Phone number
-            </span>
-            <p>{MOCK_ASSET.customer.phoneNumber}</p>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">
-              Email
-            </span>
-            <p>{MOCK_ASSET.customer.email}</p>
-          </div>
-
-          <div className="col-span-1">
-            <span className="block text-gray-500 text-[0.6rem] mb-2">
-              Created At
-            </span>
-            <p>{MOCK_ASSET.createdAt}</p>
-          </div>
-        </div>
-
-        <div className="flex float-right">
-          <Link
-            href="/customers/1"
-            className="text-blue-400 text-[0.6rem] underline"
-          >
-            Go To Profile &rarr;
-          </Link>
-        </div>
-      </div>
-      <br />
-
-      <Divider label="Devices Information" labelPosition="left" />
-
-      {/* Devices Information */}
-      <div className="p-4">
-        <table className="min-w-full border-separate border-spacing-0 mt-4">
-          <thead className="sticky top-0 z-99 bg-gray-50 rounded-t-lg">
-            <tr>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                ID
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                Type
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                Agent
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                Install Date
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                Expiry Date
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2 border-r border-gray-200">
-                Subscription
-              </th>
-              <th className="text-left font-medium text-[0.8rem] text-gray-800 px-4 py-2  w-[70px] border-gray-200"></th>
-            </tr>
-          </thead>
-          <tbody className="overflow-y-auto">
-            {MOCK_ASSET.devices.map((device) => (
-              <tr key={device.id}>
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  <Notification withCloseButton={false} color="green">
-                    {device.id}
-                  </Notification>
-                </td>
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  <Code>{device.type.toUpperCase()}</Code>
-                </td>
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200 hover:cursor-pointer hover:underline">
-                  <Link href={`/agents/${device.agent.id}`}>
-                    {device.agent.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  {moment(device.iDate).format("Do MMM YYYY")}
-                </td>
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  {moment(device.expiry).format("Do MMM YYYY")}
-                </td>
-
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  {subscriptionStatus(device.expiry) == "endsSoon" ? (
-                    <Badge color="orange" size="xs" variant="light" radius={4}>
-                      <span className="font-extralight">
-                        Subsription ends soon
-                      </span>
-                    </Badge>
-                  ) : (
-                    subscriptionStatus(device.expiry) == "hasEnded" && (
-                      <Badge color="red" size="xs" variant="light" radius={4}>
-                        <span className="font-extralight">
-                          Subsription has ended
-                        </span>
-                      </Badge>
-                    )
-                  )}
-                </td>
-
-                <td className="px-4 py-2  text-[0.8rem] border-gray-200">
-                  <div className="flex items-center">
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => handleOpenEditDeviceModal(device.id)}
-                    >
-                      Manage
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <br />
-        <div className="w-full flex justify-center p-4">
-          <Button
-            leftSection={<IconPlus />}
-            size="xs"
-            onClick={() => setOpenAddDevice(true)}
-          >
-            Attach device
-          </Button>
-        </div>
-      </div>
-
-      <EditAssetModal
-        assetId={""}
-        opened={editAssetOpen}
-        onClose={handleCloseEditAsset}
-      />
-      <EditDeviceModal
-        deviceId={""}
-        opened={editDeviceOpen}
-        onClose={handleCloseEditDevice}
-      />
-      <AddDeviceModal opened={openAddDevice} onClose={handleCloseAddDevice} />
-    </div>
-  )
-}
-
-// -----------------------------
-// Add Device Modal Component
-// -----------------------------
-interface AddDeviceModalProps {
-  opened: boolean
-  onClose: () => void
-}
-
-export const AddDeviceModal = ({ opened, onClose }: AddDeviceModalProps) => {
-  // Functions
-  const handleAddDevice = async (values: { id: string; type: string; agent: string; expiry: Date | null; iDate: string; mode: string; txCodes: string[] }) => {
-    console.log(values)
-  }
-
-  const handleError = (err: Error | unknown) => {
-    console.error(err)
-  }
-
-  // Formik
-  const formik = useFormik({
-    initialValues: {
-      id: "",
-      type: "",
-      agent: "",
-      expiry: null as Date | null,
-      iDate: "",
-      mode: "m-pesa",
-      txCodes: [] as string[],
-    },
-    validationSchema: editDeviceValidationSchema,
-    onSubmit: async (values, { setSubmitting }) => {
-      try {
-        handleAddDevice(values)
-      } catch (error) {
-        handleError(error)
-      } finally {
-        setSubmitting(false)
-      }
-    },
-  })
-
-  return (
-    <Modal
-      centered
-      title={<h1>Attach Device</h1>}
-      opened={opened}
-      onClose={onClose}
-    >
-      <form onSubmit={formik.handleSubmit}>
-        <div className="p-8 space-y-3">
-          <TextInput
-            withAsterisk
-            size="xs"
-            label="Device Identifier"
-            placeholder="ex. 1234"
-            value={formik.values.id}
-            onChange={(e) => formik.setFieldValue("id", e.target.value)}
-            error={formik.touched.id && formik.errors.id}
-          />
-
-          <Select
-            size="xs"
-            label="Device Type"
-            placeholder="Select device type"
-            data={DEVICE_TYPES}
-            withAsterisk
-            searchable
-            value={formik.values.type}
-            onChange={(val) => formik.setFieldValue("type", val)}
-            error={formik.touched.type && formik.errors.type}
-          />
-
-          <AgentSelect
-            value={formik.values.agent}
-            onChange={(val) => formik.setFieldValue("agent", val)}
-          />
-          {formik.touched.agent && formik.errors.agent && (
-            <div className="text-red-500 text-xs">{formik.errors.agent}</div>
-          )}
-
-          <DateInput label="Installation date" size="xs" />
-          <br />
-
-          <Checkbox
-            checked={true}
-            size="xs"
-            defaultChecked
-            label="Add a transaction record for this installation"
-          />
-          <br />
-
-          <NumberInput
-            size="xs"
-            label="Amount ( to be received / received )"
-            prefix="Ksh."
-            hideControls
-            thousandSeparator
-          />
-          <Radio.Group
-            size="xs"
-            label="Payment method"
-            name="mode"
-            value={formik.values.mode}
-            onChange={(val) => formik.setFieldValue("mode", val)} // IMPORTANT
-            error={formik.touched.mode && formik.errors.mode}
-          >
-            <Group mt="xs">
-              <Radio value="m-pesa" label="M-Pesa" />
-              <Radio value="cash" label="Cash" />
-            </Group>
-          </Radio.Group>
-
-          {formik.values.mode === "m-pesa" && (
-            <TagsInput
-              size="xs"
-              label="Transaction Codes"
-              placeholder="Enter M-pesa transaction codes"
-              value={formik.values.txCodes || []}
-              onChange={(val) => formik.setFieldValue("txCodes", val)}
-              error={formik.touched.txCodes ? formik.errors.txCodes as string : undefined}
-            />
-          )}
-        </div>
-
-        <div className="flex justify-end px-8 pb-4">
-          <Button
-            size="xs"
-            type="submit"
-            loading={formik.isSubmitting}
-            disabled={formik.isSubmitting}
-          >
-            Attach device
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// -----------------------------
-// Edit Device Modal Component
-// -----------------------------
-
-interface EditModalProps {
-  opened: boolean
-  onClose: () => void
-  deviceId?: string
-  assetId?: string
-}
-
-interface EditDeviceForm {
-  id: string
-  type: string
-  agent: string
-  expiry: Date
-}
-
-interface DeleteFormValues {
-  deviceId: string
-  adminId: string | undefined
-  password: string
-}
-
-export const EditDeviceModal = ({
-  opened,
-  onClose,
-  deviceId: _deviceId,
-}: EditModalProps) => {
-  // Hooks
-  const adminId = "admin-1"
-
-  // Get device with deviceId
-
-  // Functions
-  const handleEditDevice = async (values: EditDeviceForm) => {
-    console.log(values)
-  }
-
-  const handleError = (err: Error | unknown) => {
-    console.error(err)
-  }
-
-  const handleDelete = async (values: DeleteFormValues) => {
-    console.log(" Deleting devices with data:", values)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    console.log("Device deleted successfully")
-  }
-
-  // Formik
-  const formik = useFormik({
-    initialValues: {
-      id: MOCK_ASSET.devices[0].id,
-      type: MOCK_ASSET.devices[0].type,
-      agent: MOCK_ASSET.devices[0].agent.id,
-      expiry: MOCK_ASSET.devices[0].expiry,
-    },
-    validationSchema: editDeviceValidationSchema,
-    onSubmit: async (values, { setSubmitting }) => {
-      try {
-        handleEditDevice(values)
-      } catch (error) {
-        handleError(error)
-      } finally {
-        setSubmitting(false)
-      }
-    },
-  })
-
-  const deleteForm = useFormik({
-    initialValues: {
-      deviceId: "",
-      adminId,
-      password: "",
-    },
-    validationSchema: Yup.object({
-      password: Yup.string().required("Password is required"),
-    }),
-    onSubmit: async (values, { setSubmitting }) => {
-      try {
-        handleDelete(values)
-      } catch (error) {
-        handleError(error)
-      } finally {
-        setSubmitting(false)
-      }
-    },
-  })
-
-  return (
-    <Modal
-      centered
-      title={<h1>Manage Device</h1>}
-      opened={opened}
-      onClose={onClose}
-    >
-      <Tabs defaultValue="edit">
-        <Tabs.List>
-          <Tabs.Tab value="edit">Edit</Tabs.Tab>
-
-          <Tabs.Tab value="delete" color="red">
-            <span className="text-red-500">Detach </span>
-          </Tabs.Tab>
-        </Tabs.List>
-
-        <Tabs.Panel value="edit">
-          <form onSubmit={formik.handleSubmit}>
-            <div className="p-8 space-y-3">
-              <TextInput
-                withAsterisk
-                size="xs"
-                label="Device Identifier"
-                placeholder="ex. 1234"
-                value={formik.values.id}
-                onChange={(e) => formik.setFieldValue("id", e.target.value)}
-                error={formik.touched.id && formik.errors.id}
-              />
-
-              <Select
-                size="xs"
-                label="Device Type"
-                placeholder="Select device type"
-                data={DEVICE_TYPES}
-                withAsterisk
-                searchable
-                value={formik.values.type}
-                onChange={(val) => formik.setFieldValue("type", val)}
-                error={formik.touched.type && formik.errors.type}
-              />
-
-              <AgentSelect
-                value={formik.values.agent}
-                onChange={(val) => formik.setFieldValue("agent", val)}
-              />
-              {formik.touched.agent && formik.errors.agent && (
-                <div className="text-red-500 text-xs">
-                  {formik.errors.agent}
-                </div>
-              )}
-
-              <DateInput
-                size="xs"
-                label="Expiry Date"
-                withAsterisk
-                placeholder="Select expiry date"
-                value={formik.values.expiry}
-                onChange={(val) => formik.setFieldValue("expiry", val)}
-                error={formik.touched.expiry && (formik.errors.expiry as string | undefined)}
-              />
-            </div>
-
-            <div className="flex justify-end px-8 pb-4">
-              <Button
-                size="xs"
-                type="submit"
-                loading={formik.isSubmitting}
-                disabled={formik.isSubmitting}
-              >
-                Save Changes
-              </Button>
-            </div>
-          </form>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="delete">
-          <form onSubmit={deleteForm.handleSubmit}>
-            <div className="p-8 space-y-4">
-              <p>Are you sure you want to detach this device from the asset?</p>
-
-              <p>Confirm detaching by typing your password below:</p>
-
-              <PasswordInput
-                size="xs"
-                className="w-[300px]"
-                placeholder="Enter your password"
-                {...deleteForm.getFieldProps("password")}
-                error={
-                  deleteForm.touched.password && deleteForm.errors.password
-                }
-              />
-
-              <div className="flex justify-end pt-4">
-                <Button
-                  size="xs"
-                  color="red"
-                  type="submit"
-                  loading={deleteForm.isSubmitting}
-                  disabled={!deleteForm.values.password}
-                >
-                  Confirm delete
-                </Button>
-              </div>
-            </div>
-          </form>
-        </Tabs.Panel>
-      </Tabs>
-    </Modal>
-  )
-}
-
-// -----------------------------
-// Edit Asset Modal Component
-// -----------------------------
-interface EditAssetForm {
-  id: string
-  name: string
-  description: string
-  type: string
-  customer: string
-}
-
-const EditAssetModal = ({ opened, onClose, assetId: _assetId }: EditModalProps) => {
-  // Get Asset Info
-  const asset = {
-    id: "1",
-    name: "KDK 027X",
-    description: "Toyota Harrier 2015",
-    type: "car",
-    customer: "",
-  }
-
-  // Functions
-  const handleUpdateAsset = async (values: EditAssetForm) => {
-    console.log(" Submitting form", values)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    console.log("✅ Saved successfully")
-  }
-
-  const handleError = (err: Error | unknown) => {
-    console.error(err)
-  }
-
-  // Formik
-  const formik = useFormik({
-    initialValues: {
-      id: asset.id,
-      name: asset.name,
-      description: asset.description,
-      type: asset.type,
-      customer: asset.customer,
-    },
-    validationSchema: editAssetValidationSchema,
-    onSubmit: async (values, { setSubmitting }) => {
-      try {
-        await handleUpdateAsset(values)
-      } catch (error) {
-        handleError(error)
-      } finally {
-        setSubmitting(false)
-        onClose()
-      }
-    },
-  })
-  return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      centered
-      title={<h1>Edit Asset</h1>}
-    >
-      <form onSubmit={formik.handleSubmit}>
-        <div className="p-8 space-y-3">
-          <TextInput
-            placeholder="ex. KAX 224B"
-            label="Name"
-            size="xs"
-            withAsterisk
-            {...formik.getFieldProps("name")}
-            error={formik.touched.name && formik.errors.name}
-          />
-
-          <Select
-            label="Type"
-            placeholder="Select asset type"
-            withAsterisk={true}
-            size="xs"
-            data={ASSET_TYPES.map((t) => ({
-              label: t.label,
-              value: t.value,
-            }))}
-            value={formik.values.type}
-            onChange={(val) => formik.setFieldValue("type", val)}
-            onBlur={() => formik.setFieldTouched("type", true)}
-            error={formik.touched.type && formik.errors.type}
-            searchable
-          />
-
-          <Textarea
-            placeholder="ex. Toyota Harrier 2015"
-            label="Description"
-            rows={5}
-            withAsterisk
-            size="xs"
-            {...formik.getFieldProps("description")}
-            error={formik.touched.description && formik.errors.description}
-          />
-
-          <CustomerSelect
-            value={formik.values.customer}
-            onChange={(val: string | null) =>
-              formik.setFieldValue("customer", val)
-            }
-          />
-          {formik.touched.customer && formik.errors.customer && (
-            <span className="text-xs text-red-500">
-              {formik.errors.customer}
-            </span>
-          )}
-        </div>
-        <div className="flex justify-end px-8 pb-4">
-          <Button
-            size="xs"
-            type="submit"
-            loading={formik.isSubmitting}
-            disabled={formik.isSubmitting}
-          >
-            Save Changes
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// function haversineDistance(coord1, coord2) {
-//   const [lat1, lon1] = coord1
-//   const [lat2, lon2] = coord2
-
-//   const R = 6371e3 // Earth radius in meters
-//   const toRad = (deg) => (deg * Math.PI) / 180
-
-//   const φ1 = toRad(lat1)
-//   const φ2 = toRad(lat2)
-//   const Δφ = toRad(lat2 - lat1)
-//   const Δλ = toRad(lon2 - lon1)
-
-//   const a =
-//     Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2
-
-//   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-//   return (R * c) / 1000 // distance in km
-// }
-
-// const SPEED_DELAY_MAP = {
-//   FASTEST: 200,
-//   FASTER: 400,
-//   FAST: 700,
-//   NORMAL: 1000,
-//   SLOW: 1500,
-//   SLOWER: 2000,
-//   SLOWEST: 3000,
-// }
-
-// const Placeholder = ({ imageUrl, title, message }) => (
-//   <div className="flex flex-col items-center justify-center text-center py-12 text-gray-600 h-[calc(100vh-400px)]">
-//     <img src={imageUrl} alt="illustration" className="w-36 h-auto mb-4" />
-//     <h3 className="text-lg font-semibold mb-2">{title}</h3>
-//     <p className="text-sm max-w-md">{message}</p>
-//   </div>
-// )
-
-// const Playback = ({ vehicle }) => {
-//   const client = useClient()
-//   const [start, setStart] = useState(null)
-//   const [end, setEnd] = useState(null)
-//   const [speed, setSpeed] = useState("NORMAL")
-//   const [data, setData] = useState([])
-//   const [playing, setPlaying] = useState(false)
-//   const [index, setIndex] = useState(0)
-//   const [hasFetched, setHasFetched] = useState(false)
-
-//   const [intervalId, setIntervalId] = useState(null)
-
-//   const clearAll = () => {
-//     setStart(null)
-//     setEnd(null)
-//     setData([])
-//     setPlaying(false)
-//     setIndex(0)
-//     setHasFetched(false)
-
-//     if (intervalId) clearInterval(intervalId)
-//   }
-
-//   const fetchData = async () => {
-//     const res = await client
-//       .query(TELEMETRY_PLAYBACK_QUERY, {
-//         vehicleId: vehicle,
-//         startTime: start,
-//         endTime: end,
-//       })
-//       .toPromise()
-//     setData(res.data.telemetryPlayback || [])
-//     setIndex(0)
-//     setHasFetched(true)
-//   }
-
-//   const togglePlay = () => {
-//     if (playing) {
-//       clearInterval(intervalId)
-//       setPlaying(false)
-//     } else {
-//       const delay = SPEED_DELAY_MAP[speed]
-
-//       const id = setInterval(() => {
-//         setIndex((prevIndex) => {
-//           const nextIndex = prevIndex + 1
-
-//           // Check if we're at the end
-//           if (nextIndex >= data.length) {
-//             clearInterval(id)
-//             setPlaying(false)
-
-//             notifications.show({
-//               title: "Playback complete",
-//               message: "You have reached the end of the route playback.",
-//               color: "teal",
-//               icon: <IconCheck size={16} />,
-//             })
-
-//             return prevIndex // Don't increment beyond last
-//           }
-
-//           return nextIndex
-//         })
-//       }, delay)
-//       setIntervalId(id)
-//       setPlaying(true)
-//     }
-//   }
-
-//   const handleNext = () => setIndex((i) => Math.min(i + 1, data.length - 1))
-//   const handlePrev = () => setIndex((i) => Math.max(i - 1, 0))
-
-//   const current = data[index]
-
-//   const calculateDistance = () => {
-//     let dist = 0
-//     for (let i = 1; i <= index; i++) {
-//       dist += haversineDistance(
-//         data[i].location.coordinates,
-//         data[i - 1].location.coordinates
-//       )
-//     }
-//     return dist.toFixed(2)
-//   }
-
-//   return (
-//     <div>
-//       <div className="flex  space-x-4 py-4 items-center mb-4">
-//         <DateTimePicker
-//           size="xs"
-//           className="w-[140px]"
-//           value={start}
-//           onChange={setStart}
-//           label="Start Time"
-//         />
-//         <DateTimePicker
-//           size="xs"
-//           className="w-[140px]"
-//           value={end}
-//           onChange={setEnd}
-//           label="End Time"
-//         />
-
-//         <Select
-//           className="w-[100px]"
-//           data={Object.keys(SPEED_DELAY_MAP)}
-//           value={speed}
-//           label="Speed"
-//           onChange={setSpeed}
-//           size="xs"
-//         />
-
-//         <div className="flex space-x-1">
-//           <ActionIcon className="mb-[-24px]" radius={48} onClick={fetchData}>
-//             <IconSearch size={12} />
-//           </ActionIcon>
-
-//           <ActionIcon
-//             className="mb-[-24px]"
-//             radius={48}
-//             color="red"
-//             onClick={clearAll}
-//           >
-//             <IconX size={12} />
-//           </ActionIcon>
-//         </div>
-
-//         <hr />
-
-//         {data.length > 0 && (
-//           <div className="flex mb-[-24px] items-center space-x-4">
-//             <ActionIcon
-//               onClick={handlePrev}
-//               size={24}
-//               variant="light"
-//               radius={48}
-//             >
-//               <IconPlayerTrackPrev size={12} />
-//             </ActionIcon>
-
-//             {playing ? (
-//               <ActionIcon
-//                 onClick={togglePlay}
-//                 size={48}
-//                 variant="light"
-//                 radius={48}
-//               >
-//                 <IconPlayerPauseFilled />
-//               </ActionIcon>
-//             ) : (
-//               <ActionIcon
-//                 onClick={togglePlay}
-//                 size={48}
-//                 variant="light"
-//                 radius={48}
-//               >
-//                 <IconPlayerPlayFilled />
-//               </ActionIcon>
-//             )}
-
-//             <ActionIcon
-//               onClick={handleNext}
-//               size={24}
-//               variant="light"
-//               radius={48}
-//             >
-//               <IconPlayerTrackNext size={12} />
-//             </ActionIcon>
-//           </div>
-//         )}
-
-//         {data.length > 0 && (
-//           <>
-//             <div className="mb-[-12px] ml-8">
-//               <span className="text-[0.6rem] text-gray-500">Distance</span>
-//               <strong className="block">{calculateDistance()} KM</strong>
-//             </div>
-
-//             <div className="mb-[-12px] ml-8">
-//               <span className="text-[0.6rem] text-gray-500">Speed</span>
-//               <strong className="block">{current?.speed ?? 0} KPH</strong>
-//             </div>
-
-//             <div className="mb-[-12px] ml-8">
-//               <span className="text-[0.6rem] text-gray-500">Time</span>
-//               <p className="block">
-//                 {new Date(parseInt(current?.timestamp)).toLocaleString()}
-//               </p>
-//             </div>
-//           </>
-//         )}
-//       </div>
-
-//       {!start || !end ? (
-//         <Placeholder
-//           imageUrl="/assets/no-data.png"
-//           title="Select Time Range"
-//           message="To begin playback, please choose a start and end time to fetch the telemetry data."
-//         />
-//       ) : hasFetched && data.length === 0 ? (
-//         <Placeholder
-//           imageUrl="/assets/void.png"
-//           title="No Data Found"
-//           message="We couldn't find any telemetry data for the selected time range. Try adjusting the time range or checking another vehicle."
-//         />
-//       ) : (
-//         <PlaybackMap data={data} currentIndex={index} />
-//       )}
-//     </div>
-//   )
-// }
-
-// const Delete = () => {
-//   return (
-//     <div className="p-8 space-y-4">
-//       <p>Are you sure you want to remove this vehicle from the system?</p>
-//       <p>Note that this action is irreversible</p>
-//       <p>
-//         Confirm deletion by typing <Code>OLITRACK</Code> below
-//       </p>
-
-//       <PasswordInput placeholder="OLITRACK" size="xs" className="w-[300px]" />
-//       <br />
-//       <div className="flex justify-end">
-//         <Button size="xs" color="red">
-//           Confirm delete
-//         </Button>
-//       </div>
-//     </div>
-//   )
-// }
-
-// const Reports = () => {
-//   const [selectedReport, setSelectedReport] = useState("Fuel curve")
-//   return (
-//     <div>
-//       {/* Report control */}
-//       <div className="flex justify-between p-4 items-center">
-//         <div className="flex items-center space-x-4">
-//           <Select
-//             value={selectedReport}
-//             onChange={setSelectedReport}
-//             size="xs"
-//             withAsterisk
-//             placeholder="ex. Fuel curve"
-//             label="Stat type"
-//             data={[
-//               "Fuel curve",
-//               "Alert record",
-//               "Speed record",
-//               "Mileage",
-//               "Location",
-//             ]}
-//           />
-
-//           <DateInput
-//             className="w-[170px]"
-//             valueFormat="DD/MM/YYYY HH:mm:ss"
-//             label="From"
-//             size="xs"
-//             max={new Date()}
-//           />
-//           <DateInput
-//             className="w-[170px]"
-//             valueFormat="DD/MM/YYYY HH:mm:ss"
-//             label="To"
-//             size="xs"
-//           />
-
-//           {selectedReport == "Alert record" && (
-//             <Select
-//               size="xs"
-//               withAsterisk
-//               placeholder="ex. Overspeed"
-//               label="Alert"
-//               data={[
-//                 "Overspeed",
-//                 "Power disconnection",
-//                 "Refuelling",
-//                 "Fuel abnormaly",
-//                 "Expired subscription",
-//               ]}
-//             />
-//           )}
-//         </div>
-
-//         <div className="flex items-center space-x-4 mt-6">
-//           <Button size="xs">Report</Button>
-//           <Button size="xs" variant="outline">
-//             Export
-//           </Button>
-//         </div>
-//       </div>
-
-//       {/* Report */}
-
-//       {selectedReport == "Fuel curve" && <FuelReport />}
-//     </div>
-//   )
-// }
-
-// const FuelReport = () => {
-//   const { height } = useViewportSize()
-
-//   const fuelData = Array.from({ length: 50 }, (_, i) => {
-//     const startDate = new Date(2025, 2, 1) // March 1, 2025
-//     startDate.setDate(startDate.getDate() + i)
-//     const dateStr = startDate.toLocaleString("en-US", {
-//       month: "short",
-//       day: "numeric",
-//     })
-
-//     return {
-//       date: dateStr,
-//       Litres: Math.floor(Math.random() * 200) + 1, // 1 to 200
-//     }
-//   })
-
-//   return (
-//     <div className="p-12">
-//       <LineChart
-//         dotProps={{
-//           r: 1,
-//         }}
-//         h={height - 450}
-//         data={fuelData}
-//         dataKey="date"
-//         series={[{ name: "Litres", color: "indigo.6" }]}
-//         curveType="bump"
-//       />
-//     </div>
-//   )
-// }
-
-export default AssetSingle
+export default AssetSingle;

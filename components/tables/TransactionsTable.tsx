@@ -1,7 +1,5 @@
-import Empty from "@/components/Empty";
-import { Loader, Menu, Text } from "@mantine/core";
+import { Badge, Loader, Text } from "@mantine/core";
 import {
-	Column,
 	ColumnDef,
 	ColumnFiltersState,
 	SortingState,
@@ -14,26 +12,23 @@ import {
 import {
 	IconChevronDown,
 	IconChevronUp,
-	IconFilter,
 	IconSelector
 } from "@tabler/icons-react";
-import Link from "next/link";
 import React, { useMemo, useState } from "react";
 import moment from "moment";
 
-export interface Customer {
+export interface Transaction {
 	_id: string;
-	name: string;
-	email: string;
-	phone: string;
-	client_type: string;
-	location: string;
-	added_by?: { _id: string; name: string; email: string };
+	type: string;
+	amount: number;
+	agent: { _id: string; name: string; email: string; phone: string } | null;
+	device: { _id: string; serial: string } | null;
+	sale: { _id: string; product: { name: string } | null } | null;
 	createdAt: string;
 }
 
-interface CustomersTableProps {
-	customers: Customer[];
+interface TransactionsTableProps {
+	transactions: Transaction[];
 	fetching: boolean;
 	fetchingMore?: boolean;
 	error?: string | null;
@@ -41,6 +36,13 @@ interface CustomersTableProps {
 	loadMoreRef?: React.Ref<HTMLDivElement>;
 	globalFilter: string;
 }
+
+const TYPE_COLOR: Record<string, string> = {
+	installation: "green",
+	renewal: "blue",
+	commission: "orange",
+	product_sale: "violet"
+};
 
 const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	if (sorted === "asc")
@@ -50,137 +52,81 @@ const SortIcon = ({ sorted }: { sorted: false | "asc" | "desc" }) => {
 	return <IconSelector size={11} className="inline ml-1 text-slate-300" />;
 };
 
-const ClientTypeFilterHeader = ({
-	column,
-	options
-}: {
-	column: Column<Customer, unknown>;
-	options: string[];
-}) => {
-	const filterValue = column.getFilterValue() as string | undefined;
-	const isFiltered = !!filterValue;
-
-	return (
-		<div className="flex items-center justify-between gap-2">
-			<span>Client Type</span>
-			<Menu shadow="md" width={140} position="bottom-end">
-				<Menu.Target>
-					<button
-						type="button"
-						onClick={(e) => e.stopPropagation()}
-						className={`p-0.5 rounded transition-colors hover:bg-gray-200 ${
-							isFiltered ? "text-green-500" : "text-gray-400"
-						}`}>
-						<IconFilter size={10} />
-					</button>
-				</Menu.Target>
-				<Menu.Dropdown>
-					<Menu.Item
-						fz="xs"
-						fw={!filterValue ? 600 : undefined}
-						c={!filterValue ? "blue" : undefined}
-						onClick={() => column.setFilterValue(undefined)}>
-						<span className="text-[0.6rem]">All</span>
-					</Menu.Item>
-					{options.map((type) => {
-						const isActive = filterValue === type;
-						return (
-							<Menu.Item
-								key={type}
-								fz="xs"
-								fw={isActive ? 600 : undefined}
-								c={isActive ? "blue" : undefined}
-								onClick={() => column.setFilterValue(type)}>
-								<span className="text-[0.6rem]">{type}</span>
-							</Menu.Item>
-						);
-					})}
-				</Menu.Dropdown>
-			</Menu>
-		</div>
-	);
-};
-
-const CustomersTable = ({
-	customers,
+export default function TransactionsTable({
+	transactions,
 	fetching,
 	fetchingMore,
 	error,
 	hasNextPage,
 	loadMoreRef,
 	globalFilter
-}: CustomersTableProps) => {
+}: TransactionsTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-	const clientTypeOptions = useMemo(
-		() => [...new Set(customers.map((c) => c.client_type).filter(Boolean))],
-		[customers]
-	);
-
-	const columns = useMemo<ColumnDef<Customer>[]>(
+	const columns = useMemo<ColumnDef<Transaction>[]>(
 		() => [
 			{
-				accessorKey: "name",
-				header: "Full Name"
+				id: "type",
+				header: "Type",
+				accessorKey: "type",
+				cell: ({ getValue }) => {
+					const type = getValue() as string;
+					return (
+						<Badge radius={4} size="xs" color={TYPE_COLOR[type] ?? "gray"}>
+							{type.replace("_", " ")}
+						</Badge>
+					);
+				}
 			},
 			{
-				accessorKey: "email",
-				header: "Email",
-				enableSorting: false
+				id: "amount",
+				header: "Amount",
+				accessorKey: "amount",
+				cell: ({ row }) => {
+					const isCommission = row.original.type === "commission";
+					return (
+						<span
+							className={`font-medium ${isCommission ? "text-red-500" : "text-gray-700"}`}>
+							{isCommission ? "-" : ""}Ksh{" "}
+							{row.original.amount.toLocaleString()}
+						</span>
+					);
+				}
 			},
 			{
-				accessorKey: "phone",
-				header: "Phone",
-				enableSorting: false
-			},
-			{
-				accessorKey: "client_type",
-				filterFn: "equals",
-				enableSorting: false,
-				header: ({ column }) => (
-					<ClientTypeFilterHeader column={column} options={clientTypeOptions} />
-				),
+				id: "device",
+				header: "Device",
+				accessorFn: (row) => row.device?.serial ?? "",
 				cell: ({ getValue }) =>
 					(getValue() as string) || <span className="text-gray-400">—</span>
 			},
 			{
-				accessorKey: "location",
-				header: "Location"
+				id: "agent",
+				header: "Agent",
+				accessorFn: (row) => row.agent?.name ?? "",
+				cell: ({ getValue }) =>
+					(getValue() as string) || <span className="text-gray-400">—</span>
 			},
 			{
-				id: "added_by",
-				header: "Added By",
-				enableSorting: false,
-				accessorFn: (row) => row.added_by?.name ?? "",
+				id: "product",
+				header: "Product",
+				accessorFn: (row) => row.sale?.product?.name ?? "",
 				cell: ({ getValue }) =>
 					(getValue() as string) || <span className="text-gray-400">—</span>
 			},
 			{
 				accessorKey: "createdAt",
-				header: "Added On",
+				header: "Date",
 				cell: ({ getValue }) =>
 					moment(getValue() as string).format("Do MMM YYYY")
-			},
-			{
-				id: "actions",
-				header: "",
-				enableSorting: false,
-				cell: ({ row }) => (
-					<Link
-						className="text-blue-500 underline text-[0.7rem] hover:underline whitespace-nowrap"
-						href={`/customers/${row.original._id}`}
-						passHref>
-						more
-					</Link>
-				)
 			}
 		],
-		[clientTypeOptions]
+		[]
 	);
 
 	const table = useReactTable({
-		data: customers,
+		data: transactions,
 		columns,
 		state: { sorting, globalFilter, columnFilters },
 		onSortingChange: setSorting,
@@ -244,7 +190,7 @@ const CustomersTable = ({
 							{row.getVisibleCells().map((cell) => (
 								<td
 									key={cell.id}
-									className="px-3 py-1.5 text-[11px] text-gray-700 whitespace-nowrap">
+									className="px-3 py-2 text-[11px] text-gray-700 whitespace-nowrap">
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}
 								</td>
 							))}
@@ -260,6 +206,4 @@ const CustomersTable = ({
 			)}
 		</div>
 	);
-};
-
-export default CustomersTable;
+}

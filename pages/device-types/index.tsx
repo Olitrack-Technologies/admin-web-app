@@ -1,5 +1,5 @@
 import Layout from "@/components/Layout";
-import AddDeviceType from "@/components/modals/AddDeviceType";
+import AddDeviceType from "@/components/modals/additions/AddDeviceType";
 import DeviceTypesTable, {
 	DeviceType
 } from "@/components/tables/DeviceTypesTable";
